@@ -66,9 +66,93 @@ function getLocalUtils() {
   };
 }
 
-// --- 在庫データ読み込み ---
-function loadInventoryData() {
+// --- 一時データ保存/復元ヘルパー ---
+function saveTempData_(ss, monthLabels, monthDataMap) {
+  var sheetName = '_inv_temp';
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) sheet = ss.insertSheet(sheetName);
+  sheet.clearContents();
+  var rows = [];
+  for (var m = 0; m < monthLabels.length; m++) {
+    var ml = monthLabels[m];
+    var map = monthDataMap[ml] || {};
+    var keys = Object.keys(map);
+    for (var k = 0; k < keys.length; k++) {
+      rows.push([ml, keys[k], map[keys[k]]]);
+    }
+  }
+  if (rows.length > 0) {
+    sheet.getRange(1, 1, rows.length, 3).setValues(rows);
+  }
+  sheet.hideSheet();
+}
+
+function loadTempData_(ss) {
+  var sheetName = '_inv_temp';
+  var sheet = ss.getSheetByName(sheetName);
+  var monthLabels = [];
+  var monthDataMap = {};
+  if (!sheet || sheet.getLastRow() === 0) return { monthLabels: monthLabels, monthDataMap: monthDataMap };
+  var data = sheet.getDataRange().getValues();
+  var labelSet = {};
+  for (var i = 0; i < data.length; i++) {
+    var ml = String(data[i][0]);
+    var mn = String(data[i][1]);
+    var st = Number(data[i][2]);
+    if (!labelSet[ml]) { labelSet[ml] = true; monthLabels.push(ml); }
+    if (!monthDataMap[ml]) monthDataMap[ml] = {};
+    monthDataMap[ml][mn] = st;
+  }
+  return { monthLabels: monthLabels, monthDataMap: monthDataMap };
+}
+
+function cleanupTemp_(ss) {
+  var props = PropertiesService.getScriptProperties();
+  props.deleteProperty('inv_processed');
+  var sheet = ss.getSheetByName('_inv_temp');
+  if (sheet) ss.deleteSheet(sheet);
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var t = 0; t < triggers.length; t++) {
+    if (triggers[t].getHandlerFunction() === 'generateInventoryTrend') {
+      ScriptApp.deleteTrigger(triggers[t]);
+    }
+  }
+}
+
+// --- 商品マスタ読み込み ---
+function loadMasterMap() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var masterSheet = ss.getSheetByName('商品マスタ（入荷）');
+  var masterMap = {};
+  if (masterSheet && masterSheet.getLastRow() >= 2) {
+    var data = masterSheet.getDataRange().getDisplayValues();
+    for (var i = 1; i < data.length; i++) {
+      var mNo = String(data[i][0]).trim().toLowerCase();
+      if (!mNo) continue;
+      masterMap[mNo] = {
+        category: data[i][2] || '',
+        supplier: data[i][3] || '',
+        collab: data[i][5] || '',
+        launchMonth: data[i][6] || '',
+        costPrice: data[i][7] || '',
+        totalInput: data[i][8] || ''
+      };
+    }
+  }
+  return masterMap;
+}
+
+// ============================================================
+// ① 在庫推移表（自動再開対応）
+// ============================================================
+function generateInventoryTrend() {
+  var startTime = new Date().getTime();
+  var MAX_RUNTIME = 4.5 * 60 * 1000; // 4.5分でセーブ
   var utils = getLocalUtils();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var props = PropertiesService.getScriptProperties();
+
+  // --- ファイル一覧取得 ---
   var folder = DriveApp.getFolderById(INVENTORY_FOLDER_ID);
   var files = folder.getFiles();
   var allFiles = [];
@@ -78,10 +162,29 @@ function loadInventoryData() {
   }
   allFiles.sort(function(a, b) { return a.getName().localeCompare(b.getName()); });
 
-  var monthLabels = [];
-  var monthDataMap = {};
+  // --- 前回の進捗を復元 ---
+  var processedCount = parseInt(props.getProperty('inv_processed') || '0', 10);
+  var monthLabels, monthDataMap;
+  if (processedCount > 0) {
+    var temp = loadTempData_(ss);
+    monthLabels = temp.monthLabels;
+    monthDataMap = temp.monthDataMap;
+    Logger.log('再開: ' + processedCount + '/' + allFiles.length + 'ファイルから');
+  } else {
+    monthLabels = [];
+    monthDataMap = {};
+  }
 
-  for (var i = 0; i < allFiles.length; i++) {
+  // --- ファイル処理（途中から再開可能） ---
+  for (var i = processedCount; i < allFiles.length; i++) {
+    if (new Date().getTime() - startTime > MAX_RUNTIME) {
+      saveTempData_(ss, monthLabels, monthDataMap);
+      props.setProperty('inv_processed', String(i));
+      ScriptApp.newTrigger('generateInventoryTrend').timeBased().after(5000).create();
+      Logger.log('中断・自動再開予約: ' + i + '/' + allFiles.length + 'ファイル処理済');
+      return;
+    }
+
     var file = allFiles[i];
     var fileName = file.getName();
     var monthLabel = utils.extractMonth(fileName);
@@ -127,53 +230,20 @@ function loadInventoryData() {
     monthDataMap[monthLabel] = monthMap;
   }
 
+  // --- 全ファイル処理完了 ---
+  cleanupTemp_(ss);
   monthLabels.sort();
 
   var allModels = {};
   for (var m = 0; m < monthLabels.length; m++) {
-    var keys = Object.keys(monthDataMap[monthLabels[m]]);
+    var keys = Object.keys(monthDataMap[monthLabels[m]] || {});
     for (var k = 0; k < keys.length; k++) {
       if (keys[k].trim()) allModels[keys[k]] = true;
     }
   }
 
-  return { monthLabels: monthLabels, monthDataMap: monthDataMap, allModels: allModels };
-}
-
-// --- 商品マスタ読み込み ---
-function loadMasterMap() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var masterSheet = ss.getSheetByName('商品マスタ（入荷）');
-  var masterMap = {};
-  if (masterSheet && masterSheet.getLastRow() >= 2) {
-    var data = masterSheet.getDataRange().getDisplayValues();
-    for (var i = 1; i < data.length; i++) {
-      var mNo = String(data[i][0]).trim().toLowerCase();
-      if (!mNo) continue;
-      masterMap[mNo] = {
-        category: data[i][2] || '',
-        supplier: data[i][3] || '',
-        collab: data[i][5] || '',
-        launchMonth: data[i][6] || '',
-        costPrice: data[i][7] || '',
-        totalInput: data[i][8] || ''
-      };
-    }
-  }
-  return masterMap;
-}
-
-// ============================================================
-// ① 在庫推移表（単独実行OK）
-// ============================================================
-function generateInventoryTrend() {
-  var utils = getLocalUtils();
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var inv = loadInventoryData();
   var masterMap = loadMasterMap();
-  var monthLabels = inv.monthLabels;
-  var monthDataMap = inv.monthDataMap;
-  var modelKeys = Object.keys(inv.allModels).sort();
+  var modelKeys = Object.keys(allModels).sort();
 
   var outHeaders = ['型番', 'カテゴリ', '仕入先', 'コラボ', '販売開始', '下代', '累計投入'];
   for (var m = 0; m < monthLabels.length; m++) outHeaders.push(monthLabels[m]);

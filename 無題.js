@@ -331,9 +331,13 @@ function generateDigestionTrend() {
       var sold = totalInput - stock;
       if (sold < 0) sold = 0;
       var rate = sold / totalInput;
-      row.push(rate);
-      latestRate = rate;
-      if (rate >= 1.0) reached100 = true;
+      if (rate >= 1.0) {
+        reached100 = true;
+        row.push('');
+      } else {
+        row.push(rate);
+        latestRate = rate;
+      }
     }
     row.push(latestRate);
     rows.push(row);

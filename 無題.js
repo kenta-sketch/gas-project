@@ -161,6 +161,8 @@ function generateInventoryTrend() {
     if (f.getName().indexOf('在庫データ') !== -1) allFiles.push(f);
   }
   allFiles.sort(function(a, b) { return a.getName().localeCompare(b.getName()); });
+  Logger.log('在庫データファイル数: ' + allFiles.length);
+  for (var fi = 0; fi < allFiles.length; fi++) Logger.log('  ' + fi + ': ' + allFiles[fi].getName());
 
   // --- 前回の進捗を復元 ---
   var processedCount = parseInt(props.getProperty('inv_processed') || '0', 10);
@@ -440,4 +442,169 @@ function generateDigestionTrend() {
   sheet.setFrozenColumns(1);
   sheet.setFrozenRows(1);
   Logger.log('消化率推移表: ' + rows.length + '型番');
+}
+
+// ============================================================
+// ③ 上位店カテゴリー構成比サマリー
+// CSVファイルから3店舗のカテゴリー別月次構成比を1シートにまとめる
+// ============================================================
+var CATEGORY_CSV_FILE_ID = '16AWWcxo2WgXvbeg8BoCZowFiO5VNzxSS';
+var CATEGORY_SUMMARY_SHEET_NAME = '上位店カテゴリー構成比';
+
+function generateCategorySummary() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var utils = getLocalUtils();
+
+  // --- CSV読み込み ---
+  var file = DriveApp.getFileById(CATEGORY_CSV_FILE_ID);
+  var text = file.getBlob().getDataAsString('UTF-8');
+  var lines = text.split(/\r?\n/);
+  if (lines.length < 2) { Logger.log('CSVデータなし'); return; }
+
+  // --- パース ---
+  var headers = utils.parseCSVLine(lines[0]);
+  var colShop = -1, colYear = -1, colMonth = -1, colCat = -1, colSales = -1, colRatio = -1;
+  for (var h = 0; h < headers.length; h++) {
+    var name = headers[h].replace(/[\s"]/g, '');
+    if (name === 'ショップ名') colShop = h;
+    if (name === '年') colYear = h;
+    if (name === '月') colMonth = h;
+    if (name === '第2カテゴリー') colCat = h;
+    if (name === '売上額') colSales = h;
+    if (name === '構成比') colRatio = h;
+  }
+
+  // shopData[shop][month][category] = { sales, ratio }
+  var shopData = {};
+  var allMonths = {};
+  var shopOrder = [];
+
+  for (var r = 1; r < lines.length; r++) {
+    if (!lines[r].trim()) continue;
+    var cols = utils.parseCSVLine(lines[r]);
+    var shop = (cols[colShop] || '').replace(/"/g, '').trim();
+    var month = parseInt(cols[colMonth] || '0', 10);
+    var cat = (cols[colCat] || '').replace(/"/g, '').trim();
+    var sales = parseInt(String(cols[colSales] || '0').replace(/[",]/g, ''), 10) || 0;
+    var ratioStr = (cols[colRatio] || '').replace(/["%]/g, '').trim();
+    var ratio = parseFloat(ratioStr) / 100 || 0;
+
+    if (!shop || !cat || month === 0) continue;
+
+    if (!shopData[shop]) { shopData[shop] = {}; shopOrder.push(shop); }
+    if (!shopData[shop][month]) shopData[shop][month] = {};
+    allMonths[month] = true;
+
+    // 同じ月・カテゴリは上書き（CSVは構成比順なのでそのまま）
+    shopData[shop][month][cat] = { sales: sales, ratio: ratio };
+  }
+
+  var months = Object.keys(allMonths).map(Number).sort(function(a, b) { return a - b; });
+
+  // --- 各店舗のカテゴリー（構成比上位順） ---
+  // 年間合計売上でカテゴリーをソート
+  function getTopCategories(shop) {
+    var catTotals = {};
+    for (var m = 0; m < months.length; m++) {
+      var md = shopData[shop][months[m]] || {};
+      var cats = Object.keys(md);
+      for (var c = 0; c < cats.length; c++) {
+        if (!catTotals[cats[c]]) catTotals[cats[c]] = 0;
+        catTotals[cats[c]] += md[cats[c]].sales;
+      }
+    }
+    return Object.keys(catTotals).sort(function(a, b) { return catTotals[b] - catTotals[a]; });
+  }
+
+  // --- シート構築 ---
+  var sheet = ss.getSheetByName(CATEGORY_SUMMARY_SHEET_NAME);
+  if (!sheet) sheet = ss.insertSheet(CATEGORY_SUMMARY_SHEET_NAME);
+  sheet.clearContents();
+  sheet.clearFormats();
+
+  var monthHeaders = [];
+  for (var m = 0; m < months.length; m++) monthHeaders.push(months[m] + '月');
+
+  var allRows = [];
+  var shopStartRows = []; // 各店舗の開始行（書式設定用）
+
+  for (var s = 0; s < shopOrder.length; s++) {
+    var shop = shopOrder[s];
+    var categories = getTopCategories(shop);
+
+    // 店舗ヘッダー行
+    var shopHeaderRow = [shop];
+    for (var p = 0; p < monthHeaders.length + 1; p++) shopHeaderRow.push('');
+    allRows.push(shopHeaderRow);
+    shopStartRows.push(allRows.length); // 次の行がデータヘッダー
+
+    // カラムヘッダー
+    var colHeader = ['カテゴリー'].concat(monthHeaders).concat(['年間平均']);
+    allRows.push(colHeader);
+
+    // データ行
+    for (var c = 0; c < categories.length; c++) {
+      var cat = categories[c];
+      var row = [cat];
+      var sum = 0;
+      var cnt = 0;
+      for (var m = 0; m < months.length; m++) {
+        var md = shopData[shop][months[m]] || {};
+        var val = md[cat] ? md[cat].ratio : '';
+        row.push(val);
+        if (val !== '') { sum += val; cnt++; }
+      }
+      row.push(cnt > 0 ? sum / cnt : '');
+      allRows.push(row);
+    }
+
+    // 空行（店舗間）
+    if (s < shopOrder.length - 1) {
+      allRows.push([]);
+    }
+  }
+
+  // --- 一括書き込み ---
+  var totalCols = 1 + months.length + 1; // カテゴリー + 月数 + 年間平均
+  if (allRows.length > 0) {
+    sheet.getRange(1, 1, allRows.length, totalCols).setValues(allRows);
+  }
+
+  // --- 書式設定 ---
+  var colors = ['#2E75B6', '#BF4B28', '#548235'];
+  var currentRow = 1;
+  for (var s = 0; s < shopOrder.length; s++) {
+    var categories = getTopCategories(shopOrder[s]);
+    var color = colors[s % colors.length];
+
+    // 店舗名行
+    sheet.getRange(currentRow, 1, 1, totalCols)
+      .setFontWeight('bold').setFontSize(11).setBackground(color).setFontColor('white');
+    sheet.getRange(currentRow, 1).setValue(shopOrder[s]);
+    currentRow++;
+
+    // ヘッダー行
+    sheet.getRange(currentRow, 1, 1, totalCols)
+      .setFontWeight('bold').setBackground('#F2F2F2');
+    currentRow++;
+
+    // データ行の構成比を%表示
+    if (categories.length > 0) {
+      sheet.getRange(currentRow, 2, categories.length, months.length + 1).setNumberFormat('0.0%');
+    }
+    currentRow += categories.length;
+
+    // 空行スキップ
+    if (s < shopOrder.length - 1) currentRow++;
+  }
+
+  sheet.autoResizeColumns(1, totalCols);
+  sheet.setFrozenRows(0);
+  sheet.setFrozenColumns(1);
+
+  try {
+    SpreadsheetApp.getUi().alert('上位店カテゴリー構成比: ' + shopOrder.length + '店舗');
+  } catch(e) {
+    Logger.log('上位店カテゴリー構成比: ' + shopOrder.length + '店舗');
+  }
 }

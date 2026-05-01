@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html, body {
+  background: #fafaf7;
+  color: #1f2937;
+}
+
+.report-prose h1 { @apply text-2xl font-bold mt-6 mb-3; }
+.report-prose h2 { @apply text-xl font-bold mt-6 mb-2 border-l-4 border-quad-d pl-3; }
+.report-prose h3 { @apply text-lg font-semibold mt-4 mb-2; }
+.report-prose p  { @apply leading-relaxed my-3; }
+.report-prose ul { @apply list-disc pl-6 my-3 space-y-1; }
+.report-prose ol { @apply list-decimal pl-6 my-3 space-y-1; }
+.report-prose blockquote { @apply border-l-4 border-quad-b bg-amber-50 px-4 py-2 my-4 italic; }
+.report-prose strong { @apply font-bold text-quad-ink; }
+.report-prose code { @apply bg-gray-100 px-1 py-0.5 rounded text-sm; }

@@ -1,16 +1,17 @@
-import type { Candidate } from "@/lib/types";
+import type { Employee } from "@/lib/types";
 
-// デモ用ダミー候補者(3名 = A優位 / D優位 / B優位、タイプ判定の動作確認用)
-// 各候補者は採用時 + 1年後の2時点を持つ(Option B シナリオ)
-export const CANDIDATES: Candidate[] = [
+// 採用済み社員(=マネジメント対象)。既存の3名(佐藤/山田/鈴木)を移設
+export const EMPLOYEES_SEED: Employee[] = [
   {
-    id: "candidate_001",
-    name: "佐藤 一郎",
+    id: "emp_001",
+    fullName: "佐藤 一郎",
     ageRange: "20代後半",
     gender: "男性",
-    currentPosition: "なし(新卒中途採用候補)",
-    appliedPosition: "営業職",
+    hireDate: "2026-04-01",
+    currentRole: "営業職",
+    manager: "セールス責任者 大島",
     presetTendency: "D優位",
+    status: "在籍",
     diagnoses: [
       {
         date: "2026-04-01",
@@ -31,13 +32,15 @@ export const CANDIDATES: Candidate[] = [
     ],
   },
   {
-    id: "candidate_002",
-    name: "山田 花子",
+    id: "emp_002",
+    fullName: "山田 花子",
     ageRange: "20代前半",
     gender: "女性",
-    currentPosition: "アシスタント1年目",
-    appliedPosition: "顧客対応職",
+    hireDate: "2026-04-01",
+    currentRole: "顧客対応職",
+    manager: "CS責任者 三浦",
     presetTendency: "A優位",
+    status: "在籍",
     diagnoses: [
       {
         date: "2026-04-01",
@@ -58,13 +61,15 @@ export const CANDIDATES: Candidate[] = [
     ],
   },
   {
-    id: "candidate_003",
-    name: "鈴木 大輔",
+    id: "emp_003",
+    fullName: "鈴木 大輔",
     ageRange: "20代後半",
     gender: "男性",
-    currentPosition: "営業3年目",
-    appliedPosition: "リーダー候補",
+    hireDate: "2026-04-01",
+    currentRole: "営業3年目 → リーダー候補",
+    manager: "セールス責任者 大島",
     presetTendency: "B優位",
+    status: "在籍",
     diagnoses: [
       {
         date: "2026-04-01",
@@ -86,6 +91,6 @@ export const CANDIDATES: Candidate[] = [
   },
 ];
 
-export function findCandidate(id: string): Candidate | undefined {
-  return CANDIDATES.find((c) => c.id === id);
+export function findEmployee(id: string): Employee | undefined {
+  return EMPLOYEES_SEED.find((e) => e.id === id);
 }

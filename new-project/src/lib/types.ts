@@ -33,24 +33,129 @@ export type QuadType =
   | "統合型"
   | "混合型";
 
+// ============================================================
+// 採用ファネルの段階
+// ============================================================
+// stageId はSettingsで可変。デフォルトは下記。
+// "applied" は固定(応募直後)、"hired" / "rejected" も固定終端。
+// 中間の selection_* はSettings.selectionStagesで命名・追加可能。
+export type StageId =
+  | "applied" // 応募
+  | "selection_1" // 選考1次(企業によって名前可変)
+  | "selection_2" // 選考2次
+  | "selection_final" // 最終
+  | "hired" // 合格(=採用)
+  | "rejected"; // 不採用
+
+export interface Settings {
+  // 候補者の経歴情報入力モード
+  inputMode: "questions" | "resume" | "both";
+  // 選考段階の表示ラベル(StageIdとの対応)
+  stageLabels: Record<StageId, string>;
+  // 表示順
+  stageOrder: StageId[];
+}
+
+// ============================================================
+// 履歴書解析結果
+// ============================================================
+export interface ResumeData {
+  fullName?: string;
+  age?: string;
+  gender?: string;
+  address?: string;
+  email?: string;
+  phone?: string;
+  education?: { school: string; period: string; degree?: string }[];
+  workHistory?: { company: string; period: string; role: string; description?: string }[];
+  skills?: string[];
+  selfPR?: string;
+  // 元アップロードファイル名
+  fileName?: string;
+}
+
+// ============================================================
+// 面接シート
+// ============================================================
+export interface InterviewRound {
+  stageId: StageId; // どの選考フェーズの面接か
+  date: string;
+  interviewer: string;
+  // システムが提案した質問
+  suggestedQuestions: string[];
+  // 面接官のメモ
+  notes: string;
+  // この回の判定
+  outcome: "pending" | "pass" | "fail" | "hold";
+}
+
+// ============================================================
+// 診断結果(1回分)
+// ============================================================
 export interface Diagnosis {
   date: string;
-  scenario: "採用時" | "1年後";
-  answers: Array<"A" | "B" | "C" | "D">;
+  scenario: "応募時" | "採用時" | "1年後" | "再診断";
+  answers: AxisKey[];
   scores: AxisScores;
   emotions: EmotionScores;
   type: QuadType;
 }
 
-export interface Candidate {
+// ============================================================
+// 応募者(採用ファネル中の人)
+// ============================================================
+export interface Applicant {
   id: string;
-  name: string;
+  // プロフィール(質問形式 or 履歴書解析の結果が入る)
+  profile: {
+    fullName: string;
+    ageRange: string;
+    gender: "男性" | "女性" | "その他";
+    email?: string;
+    phone?: string;
+    appliedPosition: string;
+    appliedDate: string;
+  };
+  // 経歴(質問形式 or 履歴書解析)
+  resume?: ResumeData;
+  // 質問形式で答えた経歴(モードAの場合)
+  careerAnswers?: {
+    education: string;
+    workHistory: string;
+    selfPR: string;
+  };
+  // 診断結果(応募時+必要に応じて再診断)
+  diagnoses: Diagnosis[];
+  // 現在の段階
+  currentStage: StageId;
+  // 選考フェーズの履歴
+  interviews: InterviewRound[];
+  // タイプ判定キャッシュ(最新)
+  presetTendency?: "A優位" | "D優位" | "B優位" | "統合";
+  // メモ
+  generalNotes?: string;
+}
+
+// ============================================================
+// 社員(採用後 = マネジメント対象)
+// ============================================================
+export interface Employee {
+  id: string;
+  fullName: string;
   ageRange: string;
   gender: "男性" | "女性" | "その他";
-  currentPosition: string;
-  appliedPosition: string;
-  presetTendency: "A優位" | "D優位" | "B優位";
+  hireDate: string;
+  currentRole: string;
+  manager: string;
+  // 採用時の応募者ID(リンク)
+  fromApplicantId?: string;
+  // 診断履歴(採用時 / 半年 / 1年 / 2年など)
   diagnoses: Diagnosis[];
+  // 応募者から引き継いだプロフィール
+  resume?: ResumeData;
+  presetTendency?: "A優位" | "D優位" | "B優位" | "統合";
+  // 直近の状態
+  status: "在籍" | "休職" | "退職";
 }
 
 export interface Question {

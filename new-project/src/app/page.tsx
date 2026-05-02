@@ -1,70 +1,65 @@
-"use client";
-
 import Link from "next/link";
-import { CANDIDATES } from "@/data/candidates";
 
 export default function HomePage() {
   return (
-    <div className="space-y-8">
-      <section>
-        <h1 className="text-2xl font-bold mb-2">候補者を選んで診断を開始</h1>
-        <p className="text-sm text-gray-600 leading-relaxed">
-          クアッドマインド理論ベースの採用診断デモ。診断 → スコア → レポート2種 → 1年後変化 までを5分で体感できます。
-          まず候補者を選び、シナリオ(採用時 / 1年後)を選択してください。
+    <div className="space-y-10">
+      <section className="space-y-2">
+        <div className="text-xs tracking-widest text-gray-500">QUAD MIND HR PLATFORM</div>
+        <h1 className="text-3xl font-bold leading-tight">
+          1本の理論で、採用→配置→マネジメントを貫通する
+        </h1>
+        <p className="text-gray-700 max-w-3xl leading-relaxed">
+          クアッドマインド理論(A/B/C/D 4軸)をベースに、応募から定着まで「同じ言語」で人を捉えるHRプラットフォームのデモ。
+          採用ファネル(応募 → 選考 → 合格)とマネジメント(採用後の継続支援)をひとつの画面で繋ぎます。
         </p>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        {CANDIDATES.map((c) => (
-          <article
-            key={c.id}
-            className="bg-white border border-quad-line rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow"
-          >
-            <div className="flex items-baseline justify-between mb-3">
-              <h2 className="text-lg font-bold">{c.name}</h2>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-quad-paper border border-quad-line text-gray-600">
-                {c.presetTendency}
-              </span>
-            </div>
-            <dl className="text-sm text-gray-700 space-y-1 mb-5">
-              <div className="flex">
-                <dt className="w-20 text-gray-500">年代</dt>
-                <dd>{c.ageRange}</dd>
-              </div>
-              <div className="flex">
-                <dt className="w-20 text-gray-500">性別</dt>
-                <dd>{c.gender}</dd>
-              </div>
-              <div className="flex">
-                <dt className="w-20 text-gray-500">現職位</dt>
-                <dd>{c.currentPosition}</dd>
-              </div>
-              <div className="flex">
-                <dt className="w-20 text-gray-500">応募職種</dt>
-                <dd className="font-semibold text-quad-d">{c.appliedPosition}</dd>
-              </div>
-            </dl>
-            <div className="flex flex-col gap-2">
-              <Link
-                href={`/diagnose?candidateId=${c.id}&scenario=採用時`}
-                className="block text-center bg-quad-d text-white font-medium py-2 rounded hover:bg-blue-700 transition-colors"
-              >
-                採用時シナリオで診断
-              </Link>
-              <Link
-                href={`/diagnose?candidateId=${c.id}&scenario=1年後`}
-                className="block text-center bg-quad-paper border border-quad-line text-gray-700 font-medium py-2 rounded hover:bg-gray-100 transition-colors"
-              >
-                1年後シナリオで診断
-              </Link>
-            </div>
-          </article>
-        ))}
+      <section className="grid gap-6 md:grid-cols-2">
+        <Link
+          href="/admin/recruit"
+          className="block bg-white border border-quad-line rounded-lg p-6 hover:shadow-md transition-shadow"
+        >
+          <div className="text-xs tracking-widest text-gray-500 mb-2">SECTION 1</div>
+          <h2 className="text-xl font-bold mb-2">採用ダッシュボード →</h2>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            応募 / 1次 / 2次 / 最終 / 合格 のステージ別に応募者を管理。診断結果と履歴書情報を統合し、面接深掘り質問の自動提案、採用判定までを一気通貫で。
+          </p>
+        </Link>
+        <Link
+          href="/admin/manage"
+          className="block bg-white border border-quad-line rounded-lg p-6 hover:shadow-md transition-shadow"
+        >
+          <div className="text-xs tracking-widest text-gray-500 mb-2">SECTION 2</div>
+          <h2 className="text-xl font-bold mb-2">マネジメント →</h2>
+          <p className="text-sm text-gray-600 leading-relaxed">
+            採用後の社員管理。マネジメントガイド、定期再診断、1年後比較、配置最適化提案。同じ人物を時系列で追跡し、定着率と成長を支援。
+          </p>
+        </Link>
       </section>
 
-      <section className="rounded-lg bg-amber-50 border-l-4 border-quad-b p-4 text-sm text-gray-700">
-        <strong className="block mb-1">デモの見方</strong>
-        友人(理論作者)向けの可視化参照点として作成。完全な機能網羅ではなく「絵があること」を優先しています。本番では履歴書解析・面接質問提案・整合性チェック・認証/監査ログが追加されます。
+      <section className="grid gap-4 md:grid-cols-3">
+        <div className="bg-quad-paper border border-quad-line rounded p-4">
+          <div className="text-xs tracking-widest text-gray-500 mb-1">候補者向け</div>
+          <h3 className="font-bold mb-2">応募フォーム</h3>
+          <p className="text-xs text-gray-600 mb-3">候補者は公開リンクからプロフィール・経歴・診断を入力します。</p>
+          <Link href="/apply/demo" className="text-quad-d text-sm font-semibold hover:underline">
+            プレビュー →
+          </Link>
+        </div>
+        <div className="bg-quad-paper border border-quad-line rounded p-4">
+          <div className="text-xs tracking-widest text-gray-500 mb-1">管理者向け</div>
+          <h3 className="font-bold mb-2">設定</h3>
+          <p className="text-xs text-gray-600 mb-3">入力モード(質問形式/履歴書/併用)、選考段階のラベル変更。</p>
+          <Link href="/admin/settings" className="text-quad-d text-sm font-semibold hover:underline">
+            設定を開く →
+          </Link>
+        </div>
+        <div className="bg-amber-50 border border-quad-b/40 rounded p-4">
+          <div className="text-xs tracking-widest text-gray-500 mb-1">デモの見方</div>
+          <p className="text-xs text-gray-700 leading-relaxed">
+            完全な機能網羅ではなく実運用フローの可視化を優先。本番では認証・監査ログ・OCR精緻化が入ります。
+          </p>
+        </div>
       </section>
     </div>
   );

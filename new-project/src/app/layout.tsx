@@ -14,47 +14,60 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja">
-      <body className="min-h-screen font-sans antialiased">
-        <header className="border-b border-quad-line bg-white sticky top-0 z-10">
+      <body className="min-h-screen font-sans antialiased text-slate-800">
+        <div className="h-1 bg-brand-gradient" />
+        <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur sticky top-0 z-20 shadow-soft">
           <div className="mx-auto max-w-6xl px-6 py-3 flex items-center justify-between">
-            <Link href="/admin" className="block">
-              <div className="text-xs tracking-widest text-gray-500">QUAD MIND</div>
-              <div className="text-base font-bold leading-tight">HR Platform / Demo v1</div>
+            <Link href="/admin" className="flex items-center gap-3 group">
+              <div className="w-9 h-9 rounded-lg bg-brand-gradient grid place-items-center text-white font-bold text-sm shadow-sm">
+                Q
+              </div>
+              <div>
+                <div className="text-[10px] tracking-[0.2em] text-slate-500 uppercase">
+                  Quad Mind
+                </div>
+                <div className="text-sm font-bold leading-tight text-slate-900">
+                  HR Platform · Demo v1
+                </div>
+              </div>
             </Link>
-            <nav className="flex items-center gap-2 text-sm">
-              <Link
-                href="/admin/recruit"
-                className="px-3 py-1.5 rounded hover:bg-gray-50 text-gray-700"
-              >
-                採用
-              </Link>
-              <Link
-                href="/admin/manage"
-                className="px-3 py-1.5 rounded hover:bg-gray-50 text-gray-700"
-              >
-                マネジメント
-              </Link>
-              <Link
-                href="/admin/settings"
-                className="px-3 py-1.5 rounded hover:bg-gray-50 text-gray-700"
-              >
-                設定
-              </Link>
-              <span className="mx-2 h-5 w-px bg-quad-line" />
+            <nav className="flex items-center gap-1 text-sm">
+              <NavLink href="/admin/recruit">採用</NavLink>
+              <NavLink href="/admin/manage">マネジメント</NavLink>
+              <NavLink href="/admin/settings">設定</NavLink>
+              <span className="mx-2 h-5 w-px bg-slate-200" />
               <Link
                 href="/apply/demo"
-                className="px-3 py-1.5 rounded bg-quad-paper border border-quad-line text-gray-700"
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100 transition-colors"
               >
-                応募フォーム(公開)
+                応募フォーム ↗
               </Link>
             </nav>
           </div>
         </header>
-        <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
-        <footer className="mx-auto max-w-6xl px-6 py-8 text-xs text-gray-400 border-t border-quad-line mt-8">
-          Demo build · 本番では認証(SSO/RBAC)・監査ログ・暗号化・履歴書OCR(精緻版)が追加されます
+        <main className="mx-auto max-w-6xl px-6 py-10">{children}</main>
+        <footer className="mx-auto max-w-6xl px-6 py-10 mt-10 border-t border-slate-200/80">
+          <div className="flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
+            <div>
+              © Quad Mind · Eisel Inc. — <span className="text-slate-400">Demo build</span>
+            </div>
+            <div className="text-slate-400">
+              本番では認証 / 監査ログ / 暗号化 / OCR精緻化が追加されます
+            </div>
+          </div>
         </footer>
       </body>
     </html>
+  );
+}
+
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="px-3 py-1.5 rounded-lg text-slate-700 font-medium hover:bg-brand-50 hover:text-brand-700 transition-colors"
+    >
+      {children}
+    </Link>
   );
 }

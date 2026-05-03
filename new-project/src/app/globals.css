@@ -7,16 +7,30 @@
 }
 
 html, body {
-  background: #fafaf7;
-  color: #1f2937;
+  background: #f8fafc;
+  color: #0f172a;
 }
 
-.report-prose h1 { @apply text-2xl font-bold mt-6 mb-3; }
-.report-prose h2 { @apply text-xl font-bold mt-6 mb-2 border-l-4 border-quad-d pl-3; }
-.report-prose h3 { @apply text-lg font-semibold mt-4 mb-2; }
-.report-prose p  { @apply leading-relaxed my-3; }
-.report-prose ul { @apply list-disc pl-6 my-3 space-y-1; }
-.report-prose ol { @apply list-decimal pl-6 my-3 space-y-1; }
-.report-prose blockquote { @apply border-l-4 border-quad-b bg-amber-50 px-4 py-2 my-4 italic; }
-.report-prose strong { @apply font-bold text-quad-ink; }
-.report-prose code { @apply bg-gray-100 px-1 py-0.5 rounded text-sm; }
+body {
+  background-image:
+    radial-gradient(ellipse 1200px 600px at 50% -10%, rgb(238 242 255 / 0.7), transparent 60%),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  background-attachment: fixed;
+}
+
+/* レポート本文(Claude生成) */
+.report-prose h1 { @apply text-2xl font-bold mt-6 mb-3 text-slate-900; }
+.report-prose h2 { @apply text-xl font-bold mt-6 mb-2 border-l-4 border-brand-500 pl-3 text-slate-900; }
+.report-prose h3 { @apply text-lg font-semibold mt-4 mb-2 text-slate-800; }
+.report-prose p  { @apply leading-relaxed my-3 text-slate-700; }
+.report-prose ul { @apply list-disc pl-6 my-3 space-y-1 text-slate-700; }
+.report-prose ol { @apply list-decimal pl-6 my-3 space-y-1 text-slate-700; }
+.report-prose blockquote { @apply border-l-4 border-quad-b bg-amber-50 px-4 py-2 my-4 italic text-slate-700; }
+.report-prose strong { @apply font-bold text-slate-900; }
+.report-prose code { @apply bg-slate-100 px-1 py-0.5 rounded text-sm; }
+
+/* スクロールバー */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }

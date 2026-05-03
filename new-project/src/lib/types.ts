@@ -137,6 +137,20 @@ export interface Applicant {
 }
 
 // ============================================================
+// 1on1 ミーティング記録
+// ============================================================
+export interface OneOnOne {
+  id: string;
+  employeeId: string;
+  date: string;
+  manager: string;
+  topics: string[];
+  notes: string;
+  nextActions?: string;
+  mood?: 1 | 2 | 3 | 4 | 5; // 本人の状態(本人申告 or 上司観察)
+}
+
+// ============================================================
 // 社員(採用後 = マネジメント対象)
 // ============================================================
 export interface Employee {
@@ -146,6 +160,7 @@ export interface Employee {
   gender: "男性" | "女性" | "その他";
   hireDate: string;
   currentRole: string;
+  team: string; // 例: "営業部" / "プロダクト開発" / "顧客対応"
   manager: string;
   // 採用時の応募者ID(リンク)
   fromApplicantId?: string;
@@ -156,6 +171,10 @@ export interface Employee {
   presetTendency?: "A優位" | "D優位" | "B優位" | "統合";
   // 直近の状態
   status: "在籍" | "休職" | "退職";
+  // 直近の評価
+  performance?: "S" | "A" | "B" | "C";
+  // 成長余地(リーダーシップ/専門性等の総合評価)
+  potential?: "高" | "中" | "低";
 }
 
 export interface Question {

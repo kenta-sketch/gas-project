@@ -8,10 +8,12 @@ import { dominantAxis } from "@/lib/scoring";
 import { QuadRadar } from "@/components/RadarChart";
 import { ScoreTable } from "@/components/ScoreTable";
 import { EmotionBars } from "@/components/EmotionBars";
+import { TypeInsight } from "@/components/TypeInsight";
 import { AXIS_LABEL_JA } from "@/lib/types";
-import type { Employee, AxisKey } from "@/lib/types";
+import type { Employee, AxisKey, OneOnOne } from "@/lib/types";
+import { addOneOnOne, listOneOnOnesFor, newOneOnOneId } from "@/lib/store";
 
-type Tab = "overview" | "self" | "manager" | "compare";
+type Tab = "overview" | "self" | "manager" | "compare" | "oneonone";
 
 export default function EmployeeDetailPage({
   params,
@@ -73,12 +75,13 @@ export default function EmployeeDetailPage({
         </div>
       </header>
 
-      <nav className="flex gap-1 border-b border-quad-line overflow-x-auto">
+      <nav className="flex gap-1 border-b border-slate-200 overflow-x-auto">
         {(
           [
             ["overview", "概要"],
             ["self", "自己分析レポート"],
             ["manager", "マネジメントガイド"],
+            ["oneonone", "1on1 記録"],
             ["compare", "1年後比較"],
           ] as [Tab, string][]
         ).map(([t, label]) => {
@@ -89,7 +92,7 @@ export default function EmployeeDetailPage({
               onClick={() => setTab(t)}
               className={
                 "px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap transition-colors " +
-                (active ? "border-quad-d text-quad-d" : "border-transparent text-gray-500 hover:text-gray-700")
+                (active ? "border-brand-500 text-brand-700" : "border-transparent text-slate-500 hover:text-slate-700")
               }
             >
               {label}
@@ -125,10 +128,248 @@ export default function EmployeeDetailPage({
         <CompareSection employee={employee} />
       )}
       {tab === "compare" && (!t1 || !t2) && (
-        <div className="bg-amber-50 border border-quad-b/40 rounded p-4 text-sm">
+        <div className="bg-amber-50 border border-amber-200 rounded p-4 text-sm">
           採用時と1年後の両方の診断がそろっていないため、比較表示できません。
         </div>
       )}
+      {tab === "oneonone" && latest && (
+        <OneOnOneSection employee={employee} />
+      )}
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────
+// 1on1 記録
+// ──────────────────────────────────────────
+function OneOnOneSection({ employee }: { employee: Employee }) {
+  const [records, setRecords] = useState<OneOnOne[]>([]);
+  const [refresh, setRefresh] = useState(0);
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [manager, setManager] = useState(employee.manager);
+  const [topics, setTopics] = useState("");
+  const [notes, setNotes] = useState("");
+  const [nextActions, setNextActions] = useState("");
+  const [mood, setMood] = useState<1 | 2 | 3 | 4 | 5>(3);
+
+  // AI suggestion
+  const [suggestion, setSuggestion] = useState("");
+  const [suggesting, setSuggesting] = useState(false);
+  const [sugError, setSugError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRecords(listOneOnOnesFor(employee.id));
+  }, [employee.id, refresh]);
+
+  function save() {
+    if (!notes.trim()) return;
+    addOneOnOne({
+      id: newOneOnOneId(),
+      employeeId: employee.id,
+      date,
+      manager,
+      topics: topics.split(",").map((s) => s.trim()).filter(Boolean),
+      notes,
+      nextActions: nextActions || undefined,
+      mood,
+    });
+    setNotes("");
+    setNextActions("");
+    setTopics("");
+    setRefresh((k) => k + 1);
+  }
+
+  async function suggest() {
+    setSuggestion("");
+    setSugError(null);
+    setSuggesting(true);
+    try {
+      const latest = employee.diagnoses[employee.diagnoses.length - 1];
+      const recentNotes = records
+        .slice(0, 3)
+        .map((r) => `[${r.date}] ${r.notes}`)
+        .join("\n");
+      const res = await fetch("/api/oneonone-suggest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          employeeName: employee.fullName,
+          role: employee.currentRole,
+          type: latest.type,
+          scores: latest.scores,
+          emotions: latest.emotions,
+          recentNotes,
+        }),
+      });
+      if (!res.ok) {
+        setSugError(`APIエラー (${res.status}): ${(await res.text()).slice(0, 200)}`);
+        return;
+      }
+      const reader = res.body?.getReader();
+      if (!reader) return;
+      const decoder = new TextDecoder();
+      let acc = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        setSuggestion(acc);
+      }
+    } catch (e) {
+      setSugError((e as Error).message);
+    } finally {
+      setSuggesting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <section className="bg-white border border-slate-200 rounded-xl p-5 shadow-soft">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-bold text-slate-900">AIによる次回1on1テーマ提案</h2>
+          <button
+            onClick={suggest}
+            disabled={suggesting}
+            className={
+              "px-4 py-2 rounded-lg text-sm font-semibold " +
+              (suggesting ? "bg-slate-200 text-slate-500" : "bg-brand-gradient text-white hover:shadow-md")
+            }
+          >
+            {suggesting ? "生成中..." : "AIに提案させる"}
+          </button>
+        </div>
+        {sugError && (
+          <div className="bg-red-50 border border-red-200 rounded p-2 text-xs text-red-700 mb-2">{sugError}</div>
+        )}
+        {suggestion ? (
+          <div className="report-prose text-sm">
+            <ReactMarkdown>{suggestion}</ReactMarkdown>
+          </div>
+        ) : (
+          <p className="text-xs text-slate-500">
+            診断結果と直近の1on1メモから、次回1on1のテーマと進め方を提案します。
+          </p>
+        )}
+      </section>
+
+      <section className="bg-white border border-slate-200 rounded-xl p-5 shadow-soft">
+        <h2 className="font-bold text-slate-900 mb-3">1on1 記録を追加</h2>
+        <div className="grid gap-3">
+          <div className="grid sm:grid-cols-3 gap-3">
+            <label className="block">
+              <div className="text-xs font-semibold text-slate-500 mb-1">日付</div>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block sm:col-span-2">
+              <div className="text-xs font-semibold text-slate-500 mb-1">面談者</div>
+              <input
+                value={manager}
+                onChange={(e) => setManager(e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+              />
+            </label>
+          </div>
+          <label className="block">
+            <div className="text-xs font-semibold text-slate-500 mb-1">トピック(カンマ区切り)</div>
+            <input
+              value={topics}
+              onChange={(e) => setTopics(e.target.value)}
+              placeholder="例: 数字の進捗, メンタル面"
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block">
+            <div className="text-xs font-semibold text-slate-500 mb-1">メモ</div>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              rows={4}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="block">
+            <div className="text-xs font-semibold text-slate-500 mb-1">次のアクション</div>
+            <input
+              value={nextActions}
+              onChange={(e) => setNextActions(e.target.value)}
+              className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm"
+            />
+          </label>
+          <div>
+            <div className="text-xs font-semibold text-slate-500 mb-1">本人の状態(1〜5)</div>
+            <div className="flex gap-2">
+              {[1, 2, 3, 4, 5].map((v) => (
+                <button
+                  key={v}
+                  onClick={() => setMood(v as 1 | 2 | 3 | 4 | 5)}
+                  className={
+                    "w-10 h-10 rounded-lg font-bold text-sm border " +
+                    (mood === v
+                      ? "bg-brand-500 text-white border-brand-500"
+                      : "bg-white border-slate-200 hover:bg-slate-50")
+                  }
+                >
+                  {v}
+                </button>
+              ))}
+            </div>
+          </div>
+          <button
+            onClick={save}
+            disabled={!notes.trim()}
+            className={
+              "self-end px-4 py-2 rounded-lg font-semibold text-sm " +
+              (notes.trim() ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-slate-200 text-slate-500")
+            }
+          >
+            記録を保存
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <h2 className="font-bold text-slate-900 mb-3">過去の1on1({records.length}件)</h2>
+        {records.length === 0 ? (
+          <div className="bg-slate-50 border border-slate-200 rounded p-4 text-sm text-slate-500">
+            記録なし
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {records.map((r) => (
+              <div key={r.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-soft">
+                <div className="flex items-baseline justify-between mb-2">
+                  <div className="font-bold text-slate-900">{r.date} · {r.manager}</div>
+                  {r.mood && (
+                    <span className="text-xs text-slate-500">
+                      状態: <span className="font-mono font-bold">{r.mood}/5</span>
+                    </span>
+                  )}
+                </div>
+                {r.topics.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {r.topics.map((t, i) => (
+                      <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="text-sm text-slate-700 whitespace-pre-line mb-2">{r.notes}</div>
+                {r.nextActions && (
+                  <div className="text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded p-2">
+                    <strong>次のアクション:</strong> {r.nextActions}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </div>
   );
 }
@@ -173,9 +414,12 @@ function OverviewSection({ employee }: { employee: Employee }) {
       </section>
       <section>
         <h3 className="font-bold mb-2">5感情</h3>
-        <div className="bg-white border border-quad-line rounded p-5">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-soft">
           <EmotionBars emotions={latest.emotions} />
         </div>
+      </section>
+      <section>
+        <TypeInsight type={latest.type} variant="brief" />
       </section>
     </div>
   );

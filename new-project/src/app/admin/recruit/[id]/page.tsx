@@ -9,6 +9,7 @@ import { QuadRadar } from "@/components/RadarChart";
 import { EmotionBars } from "@/components/EmotionBars";
 import { ScoreTable } from "@/components/ScoreTable";
 import { StageBadge } from "@/components/StageBadge";
+import { TypeInsight } from "@/components/TypeInsight";
 import { AXIS_LABEL_JA } from "@/lib/types";
 import type { Applicant, InterviewRound, Settings, StageId } from "@/lib/types";
 
@@ -156,27 +157,30 @@ function StageController({
 function OverviewTab({ applicant }: { applicant: Applicant }) {
   const latest = applicant.diagnoses[applicant.diagnoses.length - 1];
   return (
-    <div className="grid gap-6 md:grid-cols-2">
-      <div className="bg-white border border-quad-line rounded p-5">
-        <h2 className="text-sm tracking-widest text-gray-500 mb-3">QUAD MIND RADAR</h2>
-        {latest ? <QuadRadar scores={latest.scores} primaryLabel="応募時" /> : "診断未実施"}
-      </div>
-      <div className="space-y-3">
-        <div className="bg-white border border-quad-line rounded p-4">
-          <div className="text-xs tracking-widest text-gray-500 mb-1">タイプ</div>
-          <div className="font-bold text-lg">{latest?.type ?? "—"}</div>
+    <div className="space-y-5">
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-soft">
+          <h2 className="text-[10px] tracking-[0.25em] uppercase text-slate-500 font-semibold mb-3">QUAD MIND RADAR</h2>
+          {latest ? <QuadRadar scores={latest.scores} primaryLabel="応募時" /> : "診断未実施"}
         </div>
-        <div className="bg-white border border-quad-line rounded p-4">
-          <div className="text-xs tracking-widest text-gray-500 mb-1">主エンジン</div>
-          <div className="font-bold text-lg">
-            {latest ? `${dominantAxis(latest.scores)} ── ${AXIS_LABEL_JA[dominantAxis(latest.scores)]}` : "—"}
+        <div className="space-y-3">
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-soft">
+            <div className="text-[10px] tracking-[0.25em] uppercase text-slate-500 font-semibold mb-1">タイプ</div>
+            <div className="font-bold text-xl text-slate-900">{latest?.type ?? "—"}</div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-soft">
+            <div className="text-[10px] tracking-[0.25em] uppercase text-slate-500 font-semibold mb-1">主エンジン</div>
+            <div className="font-bold text-lg text-slate-900">
+              {latest ? `${dominantAxis(latest.scores)} ── ${AXIS_LABEL_JA[dominantAxis(latest.scores)]}` : "—"}
+            </div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-soft">
+            <div className="text-[10px] tracking-[0.25em] uppercase text-slate-500 font-semibold mb-1">面接</div>
+            <div className="font-bold text-lg text-slate-900">{applicant.interviews.length} 回実施</div>
           </div>
         </div>
-        <div className="bg-white border border-quad-line rounded p-4">
-          <div className="text-xs tracking-widest text-gray-500 mb-1">面接</div>
-          <div className="font-bold text-lg">{applicant.interviews.length} 回実施</div>
-        </div>
       </div>
+      {latest && <TypeInsight type={latest.type} variant="brief" />}
     </div>
   );
 }
@@ -257,9 +261,12 @@ function DiagnosisTab({ applicant }: { applicant: Applicant }) {
       </section>
       <section>
         <h3 className="font-bold mb-2">5感情</h3>
-        <div className="bg-white border border-quad-line rounded p-5">
+        <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-soft">
           <EmotionBars emotions={latest.emotions} />
         </div>
+      </section>
+      <section>
+        <TypeInsight type={latest.type} variant="full" />
       </section>
     </div>
   );

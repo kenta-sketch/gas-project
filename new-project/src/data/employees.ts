@@ -1,6 +1,6 @@
-import type { Employee } from "@/lib/types";
+import type { Employee, OneOnOne } from "@/lib/types";
 
-// 採用済み社員(=マネジメント対象)。既存の3名(佐藤/山田/鈴木)を移設
+// 採用済み社員 = マネジメント対象
 export const EMPLOYEES_SEED: Employee[] = [
   {
     id: "emp_001",
@@ -9,9 +9,12 @@ export const EMPLOYEES_SEED: Employee[] = [
     gender: "男性",
     hireDate: "2026-04-01",
     currentRole: "営業職",
+    team: "セールス部",
     manager: "セールス責任者 大島",
     presetTendency: "D優位",
     status: "在籍",
+    performance: "B",
+    potential: "中",
     diagnoses: [
       {
         date: "2026-04-01",
@@ -38,9 +41,12 @@ export const EMPLOYEES_SEED: Employee[] = [
     gender: "女性",
     hireDate: "2026-04-01",
     currentRole: "顧客対応職",
+    team: "カスタマーサクセス部",
     manager: "CS責任者 三浦",
     presetTendency: "A優位",
     status: "在籍",
+    performance: "A",
+    potential: "高",
     diagnoses: [
       {
         date: "2026-04-01",
@@ -67,9 +73,12 @@ export const EMPLOYEES_SEED: Employee[] = [
     gender: "男性",
     hireDate: "2026-04-01",
     currentRole: "営業3年目 → リーダー候補",
+    team: "セールス部",
     manager: "セールス責任者 大島",
     presetTendency: "B優位",
     status: "在籍",
+    performance: "A",
+    potential: "高",
     diagnoses: [
       {
         date: "2026-04-01",
@@ -89,8 +98,168 @@ export const EMPLOYEES_SEED: Employee[] = [
       },
     ],
   },
+  // ── 追加(タレントマップ・チームバランスを見せるため)
+  {
+    id: "emp_004",
+    fullName: "井上 玲奈",
+    ageRange: "30代前半",
+    gender: "女性",
+    hireDate: "2025-04-01",
+    currentRole: "プロダクトマネージャー",
+    team: "プロダクト開発部",
+    manager: "プロダクト責任者 緒方",
+    presetTendency: "統合",
+    status: "在籍",
+    performance: "A",
+    potential: "高",
+    diagnoses: [
+      {
+        date: "2025-04-01",
+        scenario: "採用時",
+        answers: ["C", "D", "C", "C", "B", "C", "C", "D", "B"],
+        scores: { A: 12, B: 16, C: 20, D: 18 },
+        emotions: { fear: 2, sadness: 2, anger: 2, joy: 4, happiness: 4 },
+        type: "統合型",
+      },
+    ],
+  },
+  {
+    id: "emp_005",
+    fullName: "松本 翔",
+    ageRange: "30代前半",
+    gender: "男性",
+    hireDate: "2024-10-01",
+    currentRole: "シニアエンジニア",
+    team: "プロダクト開発部",
+    manager: "プロダクト責任者 緒方",
+    presetTendency: "D優位",
+    status: "在籍",
+    performance: "S",
+    potential: "中",
+    diagnoses: [
+      {
+        date: "2024-10-01",
+        scenario: "採用時",
+        answers: ["D", "D", "D", "D", "C", "D", "D", "D", "D"],
+        scores: { A: 9, B: 12, C: 17, D: 24 },
+        emotions: { fear: 2, sadness: 2, anger: 2, joy: 3, happiness: 3 },
+        type: "理詰め型",
+      },
+    ],
+  },
+  {
+    id: "emp_006",
+    fullName: "藤田 さやか",
+    ageRange: "20代後半",
+    gender: "女性",
+    hireDate: "2025-07-01",
+    currentRole: "カスタマーサクセスマネージャー",
+    team: "カスタマーサクセス部",
+    manager: "CS責任者 三浦",
+    presetTendency: "B優位",
+    status: "在籍",
+    performance: "A",
+    potential: "高",
+    diagnoses: [
+      {
+        date: "2025-07-01",
+        scenario: "採用時",
+        answers: ["B", "A", "B", "B", "A", "C", "B", "B", "A"],
+        scores: { A: 17, B: 19, C: 14, D: 13 },
+        emotions: { fear: 3, sadness: 2, anger: 1, joy: 5, happiness: 4 },
+        type: "承認欲求型",
+      },
+    ],
+  },
+  {
+    id: "emp_007",
+    fullName: "岡田 直樹",
+    ageRange: "40代",
+    gender: "男性",
+    hireDate: "2023-04-01",
+    currentRole: "セールスマネージャー",
+    team: "セールス部",
+    manager: "代表 健太",
+    presetTendency: "統合",
+    status: "在籍",
+    performance: "A",
+    potential: "高",
+    diagnoses: [
+      {
+        date: "2023-04-01",
+        scenario: "採用時",
+        answers: ["C", "B", "C", "D", "C", "B", "C", "D", "B"],
+        scores: { A: 12, B: 18, C: 19, D: 16 },
+        emotions: { fear: 2, sadness: 1, anger: 1, joy: 4, happiness: 5 },
+        type: "統合型",
+      },
+    ],
+  },
+  {
+    id: "emp_008",
+    fullName: "西村 智子",
+    ageRange: "20代前半",
+    gender: "女性",
+    hireDate: "2026-01-15",
+    currentRole: "マーケティング担当",
+    team: "マーケティング部",
+    manager: "マーケ責任者 大野",
+    presetTendency: "A優位",
+    status: "在籍",
+    performance: "B",
+    potential: "中",
+    diagnoses: [
+      {
+        date: "2026-01-15",
+        scenario: "採用時",
+        answers: ["A", "A", "A", "B", "A", "C", "A", "A", "A"],
+        scores: { A: 22, B: 12, C: 14, D: 10 },
+        emotions: { fear: 4, sadness: 3, anger: 3, joy: 4, happiness: 3 },
+        type: "ワガママ型",
+      },
+    ],
+  },
+];
+
+// 1on1 ミーティング記録(seed)
+export const ONE_ON_ONES_SEED: OneOnOne[] = [
+  {
+    id: "11_001",
+    employeeId: "emp_002",
+    date: "2026-04-15",
+    manager: "CS責任者 三浦",
+    topics: ["最近の業務", "メンタル面"],
+    notes: "顧客対応で複雑な案件が続き、感情的な疲労がやや高い。本人の感受性の強さが武器でもあり消耗源。",
+    nextActions: "感情リセット時間を週1で確保。チーム内のサポート役を1名アサイン。",
+    mood: 3,
+  },
+  {
+    id: "11_002",
+    employeeId: "emp_002",
+    date: "2026-04-29",
+    manager: "CS責任者 三浦",
+    topics: ["前回フォロー", "今週の課題"],
+    notes: "サポート体制で少し楽になったとのこと。本人の自己理解(統合方向への適応)が進んでいる。",
+    mood: 4,
+  },
+  {
+    id: "11_003",
+    employeeId: "emp_001",
+    date: "2026-04-22",
+    manager: "セールス責任者 大島",
+    topics: ["数字の推移", "顧客対応の課題"],
+    notes: "論理立てた提案は鋭いが、顧客の感情的な反応を読み取ることに苦手意識。山田さんとの組み合わせで補完できないか検討。",
+    nextActions: "山田さんとペアでクライアントMTGに同席する機会を設ける。",
+    mood: 3,
+  },
 ];
 
 export function findEmployee(id: string): Employee | undefined {
   return EMPLOYEES_SEED.find((e) => e.id === id);
+}
+
+export function listOneOnOnes(employeeId: string): OneOnOne[] {
+  return ONE_ON_ONES_SEED.filter((o) => o.employeeId === employeeId).sort((a, b) =>
+    b.date.localeCompare(a.date),
+  );
 }

@@ -126,3 +126,45 @@ export function saveSettings(s: Settings) {
 export function newApplicantId(): string {
   return "app_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
+
+// ============================================================
+// 1on1 記録(localStorage 追加分)
+// ============================================================
+
+import type { OneOnOne } from "./types";
+import { ONE_ON_ONES_SEED } from "@/data/employees";
+
+const ONEONONE_LS_KEY = "qm-demo-one-on-ones";
+
+function readExtraOneOnOnes(): OneOnOne[] {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(ONEONONE_LS_KEY);
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw) as OneOnOne[];
+  } catch {
+    return [];
+  }
+}
+
+function writeExtraOneOnOnes(list: OneOnOne[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(ONEONONE_LS_KEY, JSON.stringify(list));
+}
+
+export function listOneOnOnesFor(employeeId: string): OneOnOne[] {
+  const all = [...ONE_ON_ONES_SEED, ...readExtraOneOnOnes()];
+  return all
+    .filter((o) => o.employeeId === employeeId)
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export function addOneOnOne(record: OneOnOne) {
+  const extra = readExtraOneOnOnes();
+  extra.push(record);
+  writeExtraOneOnOnes(extra);
+}
+
+export function newOneOnOneId(): string {
+  return "11_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 4);
+}

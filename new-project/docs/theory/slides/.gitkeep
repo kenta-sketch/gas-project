@@ -1,2 +1,45 @@
-スライド原本(.pptx 等)をここに置きます。
-- brainjuice-v3.pptx 等
+# Quad Mind 関連スライド資料(.pptx)
+
+Drive上の元ファイルへの参照のみ保持(.pptx自体は重いためバイナリ未保存)。
+内容の確認が必要な時は MCP の read_file_content で再取得すること。
+
+## 受信済みスライド
+
+### 1. brainjuice 100q.pptx
+- Google Drive ID: `1a3vfogdRrAKbEMPGytwb0TET5rFQ_E3f`
+- LINE message ID: 611070333349003486
+- ファイルサイズ: 約673KB
+- 受信日: 2026-05-06
+- 推測内容: 100問の質問集スライド(BRAIN JUICE系の自己分析・診断材料)
+
+### 2. brainjuice v3.pptx
+- Google Drive ID: `1CKfQ5Jl6YqpEDgp7X26la2hoiWHauq7a`
+- LINE message ID: 611061203859144875
+- ファイルサイズ: 約431KB
+- 受信日: 2026-05-06
+- 推測内容: BRAIN JUICEメインスライド(20枚程度、エッセイ10章の補強資料)
+- マスター構造図セクション10の受信ログにも記載あり
+
+## 内容を取り込みたい時
+
+```typescript
+// MCP呼び出し例
+mcp__52697130-...__read_file_content({ fileId: "1a3vfogdRrAKbEMPGytwb0TET5rFQ_E3f" })
+```
+
+→ 内容を確認後、`docs/theory/notes/2026-XX-XX-{slide-name}.md` に整形保存。
+
+## 画像系の資料
+
+### 1. 611059585662845085.jpg
+- Google Drive ID: `1z49U6vhmwOOLrRAuOjhLaNhBBTOY2C9a`
+- ファイルサイズ: 約503KB
+- 推測内容: 何らかの図表または手書きメモ画像
+
+### 2. 941CDB...png
+- Google Drive ID: `1La4LKFelmSJwfT3K-6rdpr1IIyGjGxl9`
+- ファイルサイズ: 約288KB
+- description: "Screenshot"
+- 推測内容: 何らかのスクリーンショット(クアッドマインド関連の図表 or 参考画面)
+
+→ 必要時に `read_file_content`(image版)で取得し、内容を確認してから整形保存。

@@ -82,6 +82,17 @@
 | リスキリング補助金論(テキスト) | `notes/2026-05-06-reskilling-thoughts.md` | ✓整形済 |
 | LINEトーク全エクスポート | `notes/2026-05-06-line-chat-archive.md` | ⚠️ 参照ノートのみ(431KB、要チャンク処理) |
 
+#### LINE抽出ノート(2026-05-06 チャンク処理で抽出)
+
+| 元の発信日 | 整形ノート | 状態 |
+|---|---|---|
+| 2026-04-24 | `notes/2026-04-24-line-self-diagnosis.md` | ✓抽出済(健太さん v3.0 × 友人理論 統合分析、健康領域の停滞型診断) |
+| 2026-04-25 | `voice/2026-04-25-line-AI-and-meaning.md` | ✓抽出済(AI時代の人間価値、「見た目はパスポート、内面は鍵」) |
+| 2026-04-27 | `notes/2026-04-27-mbti-vs-quad-mind.md` | ✓抽出済(フロイト×アドラー × MBTI × クアッドマインド の位置づけ) |
+| 2026-05-01 | `notes/2026-05-01-recruit-cross-verification.md` | ✓抽出済★(クアッドマインド数値 × 履歴書 採用分析手法) |
+| 2026-05-01 | `notes/2026-05-01-end-of-academic-credentials.md` | ✓抽出済(学歴の時代は終わった/採用への適用) |
+| 2026-05-03 | `notes/2026-05-03-japan-vs-brazil-civilization.md` | ✓抽出済(日本とブラジル / 真逆の文明構造) |
+
 #### 音声・スライド・画像
 
 | 元ファイル | 状態 | 備考 |
@@ -122,6 +133,12 @@
 - [`notes/2026-05-06-brainjuice-proposal.md`](./notes/2026-05-06-brainjuice-proposal.md) ── 三理論統合提案書
 - [`notes/2026-05-06-battles-org-redesign-proposal.md`](./notes/2026-05-06-battles-org-redesign-proposal.md) ── B2B提案書サンプル
 - [`notes/2026-05-06-reskilling-thoughts.md`](./notes/2026-05-06-reskilling-thoughts.md) ── 国家政策との接続
+- [`notes/2026-04-24-line-self-diagnosis.md`](./notes/2026-04-24-line-self-diagnosis.md) ── 友人理論×健太v3.0 統合分析
+- [`voice/2026-04-25-line-AI-and-meaning.md`](./voice/2026-04-25-line-AI-and-meaning.md) ── AI時代の人間価値(肉声+書き起こし)
+- [`notes/2026-04-27-mbti-vs-quad-mind.md`](./notes/2026-04-27-mbti-vs-quad-mind.md) ── フロイト/アドラー/MBTIとの位置づけ
+- [`notes/2026-05-01-recruit-cross-verification.md`](./notes/2026-05-01-recruit-cross-verification.md) ── ★採用分析手法(数値×履歴書)
+- [`notes/2026-05-01-end-of-academic-credentials.md`](./notes/2026-05-01-end-of-academic-credentials.md) ── 学歴の時代は終わった
+- [`notes/2026-05-03-japan-vs-brazil-civilization.md`](./notes/2026-05-03-japan-vs-brazil-civilization.md) ── 日本×ブラジル文明比較
 
 ---
 
@@ -158,9 +175,10 @@ related:
 
 ## 残タスク・未処理
 
-- [ ] LINEトーク履歴の理論議論部分のチャンク抽出(2026年4-5月分)
+- [x] **LINEトーク履歴の理論議論部分のチャンク抽出(2026年4-5月分)** ── 完了
 - [ ] m4a音声「営業は才能ではなく配置の設計だ」の書き起こし
 - [ ] brainjuice v3.pptx / 100q.pptx の内容取り込み(必要時)
 - [ ] 画像2点の内容確認
 - [ ] プロダクトの `src/lib/prompts.ts` を、サンプルレポート2点の構造に近づける(プロンプト品質検証)
 - [ ] `src/data/employees.ts` の dummy data に新ノート(quadmind-map.md)の25職種を反映
+- [ ] `/api/interview-questions` プロンプトを `2026-05-01-recruit-cross-verification.md` の整合性チェック手法で強化

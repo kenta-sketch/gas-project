@@ -291,6 +291,18 @@ function InterviewTab({
     setError(null);
     setGenerating(true);
     try {
+      const c = applicant.careerAnswers;
+      const r = applicant.resume;
+      const careerSummary = [
+        c?.education && `学歴: ${c.education}`,
+        c?.workHistory && `職務経歴: ${c.workHistory}`,
+        c?.selfPR && `自己PR: ${c.selfPR}`,
+        r?.workHistory?.length &&
+          `履歴書職歴: ${r.workHistory.map((w) => `${w.company}(${w.period}, ${w.role})`).join(" / ")}`,
+        r?.selfPR && `履歴書自己PR: ${r.selfPR}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
       const res = await fetch("/api/interview-questions", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -302,6 +314,7 @@ function InterviewTab({
           emotions: applicant.diagnoses[0]?.emotions,
           type: applicant.diagnoses[0]?.type,
           previousNotes: applicant.interviews.map((i) => i.notes).join("\n"),
+          careerSummary,
         }),
       });
       if (!res.ok) {

@@ -5,13 +5,7 @@ import Link from "next/link";
 import { listApplicants, loadSettings } from "@/lib/store";
 import type { Applicant, Settings, StageId } from "@/lib/types";
 
-const TYPE_BADGE_COLOR: Record<string, string> = {
-  理詰め型: "bg-blue-50 text-blue-700 border-blue-200",
-  承認欲求型: "bg-amber-50 text-amber-700 border-amber-200",
-  ワガママ型: "bg-rose-50 text-rose-700 border-rose-200",
-  統合型: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  混合型: "bg-slate-50 text-slate-700 border-slate-200",
-};
+import { TYPE_TONE as TYPE_BADGE_COLOR, TYPE_TONE_DEFAULT } from "@/components/TypeTone";
 
 const STAGE_TONE: Record<StageId, { dot: string; activeBg: string; activeBorder: string; activeText: string }> = {
   applied: { dot: "bg-blue-400", activeBg: "bg-blue-50", activeBorder: "border-blue-500", activeText: "text-blue-700" },
@@ -124,7 +118,7 @@ export default function RecruitDashboardPage() {
                     <span
                       className={
                         "text-xs px-2 py-0.5 rounded-full border font-medium " +
-                        (TYPE_BADGE_COLOR[latest.type] ?? TYPE_BADGE_COLOR["混合型"])
+                        (TYPE_BADGE_COLOR[latest.type as keyof typeof TYPE_BADGE_COLOR] ?? TYPE_TONE_DEFAULT)
                       }
                     >
                       {latest.type}

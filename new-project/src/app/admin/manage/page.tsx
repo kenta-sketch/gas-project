@@ -1,14 +1,7 @@
 import Link from "next/link";
 import { EMPLOYEES_SEED } from "@/data/employees";
-import { judgeType } from "@/lib/scoring";
 
-const TYPE_TONE: Record<string, string> = {
-  理詰め型: "bg-blue-50 text-blue-700 border-blue-200",
-  承認欲求型: "bg-amber-50 text-amber-700 border-amber-200",
-  ワガママ型: "bg-rose-50 text-rose-700 border-rose-200",
-  統合型: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  混合型: "bg-slate-50 text-slate-700 border-slate-200",
-};
+import { TYPE_TONE, TYPE_TONE_DEFAULT } from "@/components/TypeTone";
 
 export default function ManageDashboardPage() {
   const teams = Array.from(new Set(EMPLOYEES_SEED.map((e) => e.team)));
@@ -101,7 +94,7 @@ export default function ManageDashboardPage() {
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {EMPLOYEES_SEED.slice(0, 6).map((emp) => {
             const latest = emp.diagnoses[emp.diagnoses.length - 1];
-            const type = latest ? judgeType(latest.scores) : "—";
+            const type = latest?.type ?? "—";
             return (
               <Link
                 key={emp.id}
@@ -114,7 +107,7 @@ export default function ManageDashboardPage() {
                     <h3 className="font-bold text-slate-900 group-hover:text-emerald-700">{emp.fullName}</h3>
                     <span
                       className={
-                        "text-[11px] px-2 py-0.5 rounded-full border " + (TYPE_TONE[type] ?? TYPE_TONE["混合型"])
+                        "text-[11px] px-2 py-0.5 rounded-full border " + (TYPE_TONE[type as keyof typeof TYPE_TONE] ?? TYPE_TONE_DEFAULT)
                       }
                     >
                       {type}

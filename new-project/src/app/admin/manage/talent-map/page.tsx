@@ -19,11 +19,18 @@ interface Plot {
 }
 
 const TYPE_COLOR: Record<string, string> = {
-  理詰め型: "#3b82f6",
-  承認欲求型: "#f59e0b",
-  ワガママ型: "#f43f5e",
   統合型: "#10b981",
-  混合型: "#64748b",
+  突破型: "#f43f5e",
+  共感型: "#f59e0b",
+  設計型: "#3b82f6",
+  忠実型: "#6366f1",
+  直感型: "#06b6d4",
+  分析型: "#64748b",
+  蓄積型: "#8b5cf6",
+  A抑圧型: "#ec4899",
+  A凍結型: "#9ca3af",
+  中庸偽装型: "#eab308",
+  単独運転型: "#84cc16",
 };
 
 export default function TalentMapPage() {

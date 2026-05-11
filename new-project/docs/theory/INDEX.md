@@ -140,6 +140,10 @@
 - [`notes/2026-05-01-end-of-academic-credentials.md`](./notes/2026-05-01-end-of-academic-credentials.md) ── 学歴の時代は終わった
 - [`notes/2026-05-03-japan-vs-brazil-civilization.md`](./notes/2026-05-03-japan-vs-brazil-civilization.md) ── 日本×ブラジル文明比較
 
+### ★ 診断仕様(プロダクト実装の決定版)
+- [`notes/2026-05-11-diagnostic-spec-v1.md`](./notes/2026-05-11-diagnostic-spec-v1.md) ── **クアッドマインド診断 完全仕様書 v1.0 (G1〜G6完全実装版)**
+- [`pdfs/2026-05-XX-diagnostic-spec-v1.pdf`](./pdfs/2026-05-XX-diagnostic-spec-v1.pdf) ── 原本PDF
+
 ---
 
 ## 運用ルール
@@ -176,9 +180,15 @@ related:
 ## 残タスク・未処理
 
 - [x] **LINEトーク履歴の理論議論部分のチャンク抽出(2026年4-5月分)** ── 完了
+- [x] **G1〜G6 理論ギャップの言語化** ── 友人が完全仕様書として提供(2026-05-11、`notes/2026-05-11-diagnostic-spec-v1.md`)
+- [ ] **★ G1〜G6 を Q1-Q9体系から75問体系へ実装移行**(大規模改修)
+- [ ] **状況固定形式(リッカート→4択シーン)への質問UI改修**
+- [ ] **時系列再診断 + 週次行動ログ機能**(改善②③)
+- [ ] **12タイプ完全マッピング**を typeDescriptions に拡張
+- [ ] **内部出力(管理職向け) vs 外部出力(本人向け)の分離表示**
 - [ ] m4a音声「営業は才能ではなく配置の設計だ」の書き起こし
 - [ ] brainjuice v3.pptx / 100q.pptx の内容取り込み(必要時)
 - [ ] 画像2点の内容確認
 - [ ] プロダクトの `src/lib/prompts.ts` を、サンプルレポート2点の構造に近づける(プロンプト品質検証)
-- [ ] `src/data/employees.ts` の dummy data に新ノート(quadmind-map.md)の25職種を反映
-- [ ] `/api/interview-questions` プロンプトを `2026-05-01-recruit-cross-verification.md` の整合性チェック手法で強化
+- [x] `src/data/employees.ts` の dummy data に新ノート(quadmind-map.md)の25職種を反映
+- [x] `/api/interview-questions` プロンプトを `2026-05-01-recruit-cross-verification.md` の整合性チェック手法で強化

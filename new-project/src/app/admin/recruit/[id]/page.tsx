@@ -10,6 +10,7 @@ import { EmotionBars } from "@/components/EmotionBars";
 import { ScoreTable } from "@/components/ScoreTable";
 import { StageBadge } from "@/components/StageBadge";
 import { TypeInsight } from "@/components/TypeInsight";
+import { DiagnosticInsight } from "@/components/DiagnosticInsight";
 import { AXIS_LABEL_JA } from "@/lib/types";
 import type { Applicant, InterviewRound, Settings, StageId } from "@/lib/types";
 
@@ -265,6 +266,15 @@ function DiagnosisTab({ applicant }: { applicant: Applicant }) {
           <EmotionBars emotions={latest.emotions} />
         </div>
       </section>
+      {latest.result && (
+        <section className="space-y-2">
+          <h3 className="font-bold">診断詳細(G2/G3/G4/G5)</h3>
+          <p className="text-xs text-slate-500">
+            管理者向け内部出力です。G5(組織毀損プロファイル)は本人には開示されません。
+          </p>
+          <DiagnosticInsight result={latest.result} internal={true} />
+        </section>
+      )}
       <section>
         <TypeInsight type={latest.type} variant="full" />
       </section>

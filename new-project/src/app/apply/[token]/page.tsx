@@ -1,25 +1,33 @@
 "use client";
 
 import { use, useEffect, useMemo, useState } from "react";
-import { QUESTIONS, EMOTION_QUESTIONS } from "@/lib/questions";
-import { computeAxisScores, judgeType } from "@/lib/scoring";
+import { QUESTION_SECTIONS, EMOTION_QUESTIONS, FZ_QUESTIONS } from "@/lib/questions";
+import { computeFullDiagnosis } from "@/lib/scoring";
 import {
   loadSettings,
   newApplicantId,
   upsertApplicant,
 } from "@/lib/store";
-import {
-  EMOTION_LABEL_JA,
-} from "@/lib/types";
+import { EMOTION_LABEL_JA } from "@/lib/types";
 import type {
-  AxisKey,
   EmotionScores,
   ResumeData,
   Settings,
   Applicant,
+  LikertValue,
+  DiagnosticAnswers,
+  QuadType,
 } from "@/lib/types";
 
-type Step = "profile" | "career" | "diagnosis" | "review" | "done";
+type Step = "profile" | "career" | "diagnostic" | "emotions" | "done";
+
+const LIKERT_LABELS: Record<LikertValue, string> = {
+  1: "全くあてはまらない",
+  2: "あまりあてはまらない",
+  3: "どちらでもない",
+  4: "ややあてはまる",
+  5: "とてもあてはまる",
+};
 
 export default function ApplyPage({
   params,
@@ -29,6 +37,7 @@ export default function ApplyPage({
   const { token } = use(params);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [step, setStep] = useState<Step>("profile");
+  const [diagSectionIdx, setDiagSectionIdx] = useState(0);
   const [applicantId] = useState(() => newApplicantId());
 
   useEffect(() => {
@@ -43,7 +52,7 @@ export default function ApplyPage({
   const [phone, setPhone] = useState("");
   const [appliedPosition, setAppliedPosition] = useState("");
 
-  // ---- 経歴 (質問形式) ----
+  // ---- 経歴 ----
   const [education, setEducation] = useState("");
   const [workHistory, setWorkHistory] = useState("");
   const [selfPR, setSelfPR] = useState("");
@@ -54,10 +63,14 @@ export default function ApplyPage({
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
 
-  // ---- 診断 ----
-  const [answers, setAnswers] = useState<(AxisKey | null)[]>(
-    Array(QUESTIONS.length).fill(null),
-  );
+  // ---- 診断回答(75問体系) ----
+  const [answers, setAnswers] = useState<DiagnosticAnswers>({
+    axis: {},
+    aSeparation: {},
+    integration: {},
+    responsibility: {},
+    orgRisk: {},
+  });
   const [emotions, setEmotions] = useState<EmotionScores>({
     fear: 3,
     sadness: 3,
@@ -65,6 +78,18 @@ export default function ApplyPage({
     joy: 3,
     happiness: 3,
   });
+
+  // FZ分岐: 内的A高 × 表出A低 のときだけ表示
+  const showFZ = useMemo(() => {
+    const iAValues = ["iA-1","iA-2","iA-3","iA-4","iA-5"].map((id) => answers.aSeparation[id]).filter(Boolean) as LikertValue[];
+    const eAValues = ["eA-1","eA-2","eA-3","eA-4","eA-5"].map((id) => answers.aSeparation[id]).filter(Boolean) as LikertValue[];
+    if (iAValues.length < 5 || eAValues.length < 5) return false;
+    const iAAvg = iAValues.reduce((s, v) => s + v, 0) / iAValues.length;
+    const eA5Reversed = 6 - (answers.aSeparation["eA-5"] ?? 3);
+    const eAValuesAdj = eAValues.map((v, i) => i === 4 ? eA5Reversed : v);
+    const eAAvg = eAValuesAdj.reduce((s, v) => s + v, 0) / eAValuesAdj.length;
+    return iAAvg >= 3.5 && eAAvg < 3.0;
+  }, [answers.aSeparation]);
 
   if (!settings) return <div>読み込み中...</div>;
 
@@ -80,6 +105,26 @@ export default function ApplyPage({
     if (settings && settings.inputMode === "both") return (education && workHistory) || resumeData;
     return false;
   }
+
+  const currentSection = QUESTION_SECTIONS[diagSectionIdx];
+  const sectionQuestionsExtended = useMemo(() => {
+    if (currentSection.id === "aSeparation" && showFZ) {
+      return [...currentSection.questions, ...FZ_QUESTIONS];
+    }
+    return currentSection.questions;
+  }, [currentSection, showFZ]);
+
+  const sectionAnswered = sectionQuestionsExtended.every((q) => {
+    return answers[currentSection.field][q.id] !== undefined;
+  });
+
+  const totalQuestions = QUESTION_SECTIONS.reduce((s, sec) => s + sec.questions.length, 0) + (showFZ ? 2 : 0);
+  const answeredQuestions =
+    Object.keys(answers.axis).length +
+    Object.keys(answers.aSeparation).length +
+    Object.keys(answers.integration).length +
+    Object.keys(answers.responsibility).length +
+    Object.keys(answers.orgRisk).length;
 
   async function uploadResume(file: File) {
     setParsing(true);
@@ -107,7 +152,6 @@ export default function ApplyPage({
         return;
       }
       setResumeData(data as ResumeData);
-      // 自動で profile に反映
       if (data.fullName && !fullName) setFullName(data.fullName);
       if (data.email && !email) setEmail(data.email);
       if (data.phone && !phone) setPhone(data.phone);
@@ -118,22 +162,44 @@ export default function ApplyPage({
     }
   }
 
-  function setAnswer(idx: number, axis: AxisKey) {
-    setAnswers((prev) => {
-      const next = [...prev];
-      next[idx] = axis;
-      return next;
-    });
+  function setAnswer(field: keyof DiagnosticAnswers, qId: string, value: LikertValue) {
+    setAnswers((prev) => ({
+      ...prev,
+      [field]: { ...prev[field], [qId]: value },
+    }));
   }
 
-  const allAnswered = answers.every((a) => a !== null);
+  function nextSection() {
+    if (diagSectionIdx < QUESTION_SECTIONS.length - 1) {
+      setDiagSectionIdx(diagSectionIdx + 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      setStep("emotions");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }
+  function prevSection() {
+    if (diagSectionIdx > 0) {
+      setDiagSectionIdx(diagSectionIdx - 1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } else {
+      setStep("career");
+    }
+  }
 
   function submit() {
-    if (!allAnswered) return;
-    const finalAnswers = answers as AxisKey[];
-    const scores = computeAxisScores(finalAnswers);
-    const type = judgeType(scores);
+    const result = computeFullDiagnosis(answers, emotions);
     const today = new Date().toISOString().slice(0, 10);
+    const presetTendency =
+      result.primaryType === "突破型"
+        ? "A優位"
+        : result.primaryType === "分析型" || result.primaryType === "設計型"
+          ? "D優位"
+          : result.primaryType === "共感型" || result.primaryType === "忠実型"
+            ? "B優位"
+            : result.primaryType === "統合型"
+              ? "統合"
+              : undefined;
     const applicant: Applicant = {
       id: applicantId,
       profile: {
@@ -145,28 +211,25 @@ export default function ApplyPage({
         appliedPosition,
         appliedDate: today,
       },
-      careerAnswers: useQuestions && (education || workHistory || selfPR)
-        ? { education, workHistory, selfPR }
-        : undefined,
+      careerAnswers:
+        useQuestions && (education || workHistory || selfPR)
+          ? { education, workHistory, selfPR }
+          : undefined,
       resume: useResume && resumeData ? resumeData : undefined,
       diagnoses: [
         {
           date: today,
           scenario: "応募時",
-          answers: finalAnswers,
-          scores,
+          answers,
+          scores: result.scores,
           emotions,
-          type,
+          type: result.primaryType,
+          result,
         },
       ],
       currentStage: "applied",
       interviews: [],
-      presetTendency:
-        type === "ワガママ型" ? "A優位"
-        : type === "理詰め型" ? "D優位"
-        : type === "承認欲求型" ? "B優位"
-        : type === "統合型" ? "統合"
-        : undefined,
+      presetTendency,
     };
     upsertApplicant(applicant);
     setStep("done");
@@ -174,17 +237,31 @@ export default function ApplyPage({
 
   return (
     <div className="space-y-8 max-w-3xl mx-auto">
-      <header className="border-b border-quad-line pb-3">
-        <div className="text-xs tracking-widest text-gray-500">応募フォーム · token: {token}</div>
+      <header className="border-b border-slate-200 pb-3">
+        <div className="text-xs tracking-widest text-slate-500">応募フォーム · token: {token}</div>
         <h1 className="text-2xl font-bold">採用応募</h1>
-        <p className="text-sm text-gray-600 mt-1">
-          所要時間 約10分。プロフィール → 経歴 → 診断 の3ステップで完了します。
+        <p className="text-sm text-slate-600 mt-1">
+          所要時間 約15-20分。プロフィール → 経歴 → 診断(75問・5セクション) で完了します。
         </p>
         <StepIndicator step={step} />
+        {step === "diagnostic" && (
+          <div className="mt-3">
+            <div className="flex justify-between text-xs text-slate-500 mb-1">
+              <span>進捗</span>
+              <span className="font-mono">{answeredQuestions} / {totalQuestions}</span>
+            </div>
+            <div className="h-1.5 bg-slate-100 rounded">
+              <div
+                className="h-1.5 bg-brand-gradient rounded transition-all"
+                style={{ width: `${(answeredQuestions / totalQuestions) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
       </header>
 
       {step === "profile" && (
-        <section className="bg-white border border-quad-line rounded-lg p-6 space-y-4">
+        <section className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
           <h2 className="font-bold">Step 1 · プロフィール</h2>
           <div className="grid gap-3">
             <Field label="氏名 *" value={fullName} onChange={setFullName} />
@@ -206,7 +283,12 @@ export default function ApplyPage({
               <Field label="メール" value={email} onChange={setEmail} type="email" />
               <Field label="電話番号" value={phone} onChange={setPhone} />
             </div>
-            <Field label="応募職種 *" value={appliedPosition} onChange={setAppliedPosition} placeholder="例: 営業職 / エンジニア" />
+            <Field
+              label="応募職種 *"
+              value={appliedPosition}
+              onChange={setAppliedPosition}
+              placeholder="例: 営業職 / エンジニア"
+            />
           </div>
           <div className="flex justify-end">
             <button
@@ -215,8 +297,8 @@ export default function ApplyPage({
               className={
                 "px-5 py-2 rounded font-semibold " +
                 (profileValid()
-                  ? "bg-quad-d text-white hover:bg-blue-700"
-                  : "bg-gray-200 text-gray-400 cursor-not-allowed")
+                  ? "bg-brand-gradient text-white hover:shadow-md"
+                  : "bg-slate-200 text-slate-400 cursor-not-allowed")
               }
             >
               次へ →
@@ -228,7 +310,7 @@ export default function ApplyPage({
       {step === "career" && (
         <section className="space-y-4">
           {useResume && (
-            <div className="bg-white border border-quad-line rounded-lg p-6 space-y-3">
+            <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-3">
               <h2 className="font-bold">経歴 · 履歴書アップロード(PDF / 画像)</h2>
               <input
                 type="file"
@@ -242,15 +324,18 @@ export default function ApplyPage({
                 }}
                 className="block text-sm"
               />
-              {parsing && <div className="text-sm text-gray-500">AI解析中...</div>}
+              {parsing && <div className="text-sm text-slate-500">AI解析中...</div>}
               {parseError && (
-                <div className="bg-red-50 border border-red-200 rounded p-2 text-sm text-red-700">{parseError}</div>
+                <div className="bg-red-50 border border-red-200 rounded p-2 text-sm text-red-700">
+                  {parseError}
+                </div>
               )}
               {resumeData && (
                 <div className="bg-emerald-50 border border-emerald-200 rounded p-3 text-sm">
                   <div className="font-bold mb-1">✓ 解析完了: {resumeFile?.name}</div>
-                  <div className="text-gray-700">
-                    氏名: {resumeData.fullName ?? "—"} · メール: {resumeData.email ?? "—"} · 学歴: {resumeData.education?.length ?? 0}件 · 職歴: {resumeData.workHistory?.length ?? 0}件
+                  <div className="text-slate-700">
+                    氏名: {resumeData.fullName ?? "—"} · 学歴: {resumeData.education?.length ?? 0}件 · 職歴:{" "}
+                    {resumeData.workHistory?.length ?? 0}件
                   </div>
                 </div>
               )}
@@ -258,29 +343,32 @@ export default function ApplyPage({
           )}
 
           {useQuestions && (
-            <div className="bg-white border border-quad-line rounded-lg p-6 space-y-3">
+            <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-3">
               <h2 className="font-bold">経歴 · 質問形式入力</h2>
-              <Textarea label="学歴" value={education} onChange={setEducation} placeholder="例: ○○大学 ○○学部 卒業 (2020年3月)" />
-              <Textarea label="職務経歴" value={workHistory} onChange={setWorkHistory} placeholder="主な経歴を簡潔に" rows={5} />
-              <Textarea label="自己PR" value={selfPR} onChange={setSelfPR} placeholder="強みや志望動機など" rows={4} />
+              <Textarea label="学歴" value={education} onChange={setEducation} />
+              <Textarea label="職務経歴" value={workHistory} onChange={setWorkHistory} rows={5} />
+              <Textarea label="自己PR" value={selfPR} onChange={setSelfPR} rows={4} />
             </div>
           )}
 
           <div className="flex justify-between">
             <button
               onClick={() => setStep("profile")}
-              className="px-4 py-2 rounded border border-quad-line bg-white"
+              className="px-4 py-2 rounded border border-slate-200 bg-white"
             >
               ← 戻る
             </button>
             <button
-              onClick={() => setStep("diagnosis")}
+              onClick={() => {
+                setStep("diagnostic");
+                setDiagSectionIdx(0);
+              }}
               disabled={!careerValid()}
               className={
                 "px-5 py-2 rounded font-semibold " +
                 (careerValid()
-                  ? "bg-quad-d text-white hover:bg-blue-700"
-                  : "bg-gray-200 text-gray-400 cursor-not-allowed")
+                  ? "bg-brand-gradient text-white hover:shadow-md"
+                  : "bg-slate-200 text-slate-400 cursor-not-allowed")
               }
             >
               次へ →
@@ -289,46 +377,84 @@ export default function ApplyPage({
         </section>
       )}
 
-      {step === "diagnosis" && (
+      {step === "diagnostic" && (
         <section className="space-y-4">
-          <div className="bg-white border border-quad-line rounded-lg p-6 space-y-4">
-            <h2 className="font-bold">Step 3 · 診断 (Q1〜Q9)</h2>
-            <p className="text-sm text-gray-600">
-              直感で答えてください。正解はありません。あなたの「動き方のパターン」を見るための質問です。
-            </p>
-            {QUESTIONS.map((q, idx) => (
-              <div key={q.id} className="border-t border-quad-line pt-3">
-                <div className="text-sm font-medium mb-2">
-                  <span className="font-mono text-gray-400 mr-2">{q.id}</span>
-                  {q.text}
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {q.options.map((opt, oi) => {
-                    const sel = answers[idx] === opt.axis;
-                    return (
-                      <button
-                        key={oi}
-                        onClick={() => setAnswer(idx, opt.axis)}
-                        className={
-                          "text-left text-sm px-3 py-2 rounded border transition-colors " +
-                          (sel
-                            ? "bg-quad-d/10 border-quad-d ring-1 ring-quad-d"
-                            : "bg-white border-quad-line hover:bg-gray-50")
-                        }
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
+          <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-4">
+            <div>
+              <div className="text-xs text-slate-500 mb-1">
+                {diagSectionIdx + 1} / {QUESTION_SECTIONS.length}
               </div>
-            ))}
+              <h2 className="font-bold text-lg">{currentSection.title}</h2>
+              <p className="text-sm text-slate-600 mt-1">{currentSection.description}</p>
+            </div>
+            <div className="space-y-4">
+              {sectionQuestionsExtended.map((q) => {
+                const field = q.category === "FZ" ? "aSeparation" : currentSection.field;
+                const sel = answers[field][q.id];
+                return (
+                  <div key={q.id} className="border-t border-slate-100 pt-3">
+                    <div className="text-sm font-medium mb-2 text-slate-800">
+                      <span className="font-mono text-xs text-slate-400 mr-2">{q.id}</span>
+                      {q.text}
+                    </div>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {([1, 2, 3, 4, 5] as LikertValue[]).map((v) => {
+                        const isSelected = sel === v;
+                        return (
+                          <button
+                            key={v}
+                            onClick={() => setAnswer(field, q.id, v)}
+                            className={
+                              "px-2 py-2 rounded-lg border text-xs transition-colors " +
+                              (isSelected
+                                ? "bg-brand-500 text-white border-brand-500"
+                                : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600")
+                            }
+                          >
+                            <div className="font-bold mb-0.5">{v}</div>
+                            <div className="text-[10px] leading-tight">{LIKERT_LABELS[v]}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="bg-white border border-quad-line rounded-lg p-6 space-y-3">
-            <h3 className="font-bold">5感情の自己評価(各 1〜5)</h3>
+          <div className="flex justify-between gap-3 sticky bottom-2 z-10">
+            <button
+              onClick={prevSection}
+              className="px-4 py-2 rounded border border-slate-200 bg-white shadow-sm"
+            >
+              ← 前へ
+            </button>
+            <button
+              onClick={nextSection}
+              disabled={!sectionAnswered}
+              className={
+                "flex-1 px-5 py-3 rounded font-semibold shadow-sm " +
+                (sectionAnswered
+                  ? "bg-brand-gradient text-white hover:shadow-md"
+                  : "bg-slate-200 text-slate-400 cursor-not-allowed")
+              }
+            >
+              {diagSectionIdx < QUESTION_SECTIONS.length - 1
+                ? `次のセクション(${diagSectionIdx + 2} / ${QUESTION_SECTIONS.length}) →`
+                : "5感情の評価へ →"}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {step === "emotions" && (
+        <section className="space-y-4">
+          <div className="bg-white border border-slate-200 rounded-lg p-6 space-y-3">
+            <h2 className="font-bold">最終ステップ · 5感情の自己評価</h2>
+            <p className="text-sm text-slate-600">現在のあなたの状態を1〜5で評価してください。</p>
             {EMOTION_QUESTIONS.map((eq) => (
-              <div key={eq.key}>
+              <div key={eq.key} className="border-t border-slate-100 pt-3">
                 <div className="text-sm font-medium mb-2">{EMOTION_LABEL_JA[eq.key]}</div>
                 <div className="flex gap-2">
                   {[1, 2, 3, 4, 5].map((v) => {
@@ -338,8 +464,10 @@ export default function ApplyPage({
                         key={v}
                         onClick={() => setEmotions((p) => ({ ...p, [eq.key]: v }))}
                         className={
-                          "w-10 h-10 rounded font-mono text-sm border " +
-                          (sel ? "bg-quad-b text-white border-quad-b" : "bg-white border-quad-line hover:bg-gray-50")
+                          "w-12 h-12 rounded-lg font-mono text-sm border " +
+                          (sel
+                            ? "bg-quad-b text-white border-quad-b"
+                            : "bg-white border-slate-200 hover:bg-slate-50")
                         }
                       >
                         {v}
@@ -353,22 +481,19 @@ export default function ApplyPage({
 
           <div className="flex justify-between">
             <button
-              onClick={() => setStep("career")}
-              className="px-4 py-2 rounded border border-quad-line bg-white"
+              onClick={() => {
+                setStep("diagnostic");
+                setDiagSectionIdx(QUESTION_SECTIONS.length - 1);
+              }}
+              className="px-4 py-2 rounded border border-slate-200 bg-white"
             >
               ← 戻る
             </button>
             <button
               onClick={submit}
-              disabled={!allAnswered}
-              className={
-                "px-5 py-2 rounded font-semibold " +
-                (allAnswered
-                  ? "bg-quad-c text-white hover:bg-emerald-700"
-                  : "bg-gray-200 text-gray-400 cursor-not-allowed")
-              }
+              className="px-5 py-2 rounded font-semibold bg-emerald-600 text-white hover:bg-emerald-700"
             >
-              送信して応募完了({answers.filter(Boolean).length}/{QUESTIONS.length})
+              送信して応募完了
             </button>
           </div>
         </section>
@@ -377,15 +502,15 @@ export default function ApplyPage({
       {step === "done" && (
         <section className="bg-emerald-50 border-l-4 border-quad-c rounded p-6 space-y-3">
           <h2 className="text-xl font-bold">✓ 応募完了</h2>
-          <p className="text-gray-700">
+          <p className="text-slate-700">
             ご応募ありがとうございました。担当者より追ってご連絡いたします。
           </p>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-slate-500">
             応募ID: {applicantId}(管理画面の応募ステージに反映されました)
           </p>
           <a
             href="/admin/recruit"
-            className="inline-block bg-quad-d text-white text-sm font-semibold px-3 py-2 rounded"
+            className="inline-block bg-brand-gradient text-white text-sm font-semibold px-3 py-2 rounded"
           >
             (デモ用) 管理画面で確認 →
           </a>
@@ -396,31 +521,31 @@ export default function ApplyPage({
 }
 
 function StepIndicator({ step }: { step: Step }) {
-  const order: Step[] = ["profile", "career", "diagnosis", "done"];
+  const order: Step[] = ["profile", "career", "diagnostic", "emotions", "done"];
   const idx = order.indexOf(step);
   const labels: Record<Step, string> = {
     profile: "プロフィール",
     career: "経歴",
-    diagnosis: "診断",
-    review: "確認",
+    diagnostic: "診断",
+    emotions: "感情",
     done: "完了",
   };
   return (
-    <div className="flex items-center gap-2 mt-3 text-xs">
-      {order.slice(0, 3).map((s, i) => (
-        <div key={s} className="flex items-center gap-2">
+    <div className="flex items-center gap-1.5 mt-3 text-xs flex-wrap">
+      {order.slice(0, 4).map((s, i) => (
+        <div key={s} className="flex items-center gap-1.5">
           <span
             className={
               "inline-flex items-center justify-center w-6 h-6 rounded-full font-mono " +
-              (i <= idx ? "bg-quad-d text-white" : "bg-gray-200 text-gray-500")
+              (i <= idx ? "bg-brand-gradient text-white" : "bg-slate-200 text-slate-500")
             }
           >
             {i + 1}
           </span>
-          <span className={i <= idx ? "text-gray-800 font-bold" : "text-gray-400"}>
+          <span className={i <= idx ? "text-slate-800 font-bold" : "text-slate-400"}>
             {labels[s]}
           </span>
-          {i < 2 && <span className="mx-1 text-gray-300">→</span>}
+          {i < 3 && <span className="mx-0.5 text-slate-300">→</span>}
         </div>
       ))}
     </div>
@@ -442,13 +567,13 @@ function Field({
 }) {
   return (
     <label className="block">
-      <div className="text-xs tracking-widest text-gray-500 mb-1">{label}</div>
+      <div className="text-xs tracking-widest text-slate-500 mb-1">{label}</div>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full border border-quad-line rounded px-3 py-2 text-sm"
+        className="w-full border border-slate-200 rounded px-3 py-2 text-sm"
       />
     </label>
   );
@@ -469,13 +594,13 @@ function Textarea({
 }) {
   return (
     <label className="block">
-      <div className="text-xs tracking-widest text-gray-500 mb-1">{label}</div>
+      <div className="text-xs tracking-widest text-slate-500 mb-1">{label}</div>
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         rows={rows}
-        className="w-full border border-quad-line rounded px-3 py-2 text-sm"
+        className="w-full border border-slate-200 rounded px-3 py-2 text-sm"
       />
     </label>
   );
@@ -494,11 +619,11 @@ function SelectField({
 }) {
   return (
     <label className="block">
-      <div className="text-xs tracking-widest text-gray-500 mb-1">{label}</div>
+      <div className="text-xs tracking-widest text-slate-500 mb-1">{label}</div>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-quad-line rounded px-3 py-2 text-sm bg-white"
+        className="w-full border border-slate-200 rounded px-3 py-2 text-sm bg-white"
       >
         {options.map((o) => (
           <option key={o} value={o}>

@@ -26,34 +26,128 @@ export const AXIS_DESCRIPTION: Record<AxisKey, string> = {
 export type AxisScores = Record<AxisKey, number>;
 export type EmotionScores = Record<EmotionKey, number>;
 
+// ============================================================
+// G6: 12タイプ完全マッピング(診断仕様書 v1.0)
+// ============================================================
 export type QuadType =
-  | "理詰め型"
-  | "承認欲求型"
-  | "ワガママ型"
   | "統合型"
-  | "混合型";
+  | "突破型"
+  | "共感型"
+  | "設計型"
+  | "忠実型"
+  | "直感型"
+  | "分析型"
+  | "蓄積型"
+  | "A抑圧型"
+  | "A凍結型"
+  | "中庸偽装型"
+  | "単独運転型";
+
+export const ALL_QUAD_TYPES: QuadType[] = [
+  "統合型",
+  "突破型",
+  "共感型",
+  "設計型",
+  "忠実型",
+  "直感型",
+  "分析型",
+  "蓄積型",
+  "A抑圧型",
+  "A凍結型",
+  "中庸偽装型",
+  "単独運転型",
+];
 
 // ============================================================
-// 採用ファネルの段階
+// G2: A発火/A表出分離
 // ============================================================
-// stageId はSettingsで可変。デフォルトは下記。
-// "applied" は固定(応募直後)、"hired" / "rejected" も固定終端。
-// 中間の selection_* はSettings.selectionStagesで命名・追加可能。
-export type StageId =
-  | "applied" // 応募
-  | "selection_1" // 選考1次(企業によって名前可変)
-  | "selection_2" // 選考2次
-  | "selection_final" // 最終
-  | "hired" // 合格(=採用)
-  | "rejected"; // 不採用
+export type AClassification =
+  | "真性A低"
+  | "A抑圧型"
+  | "A凍結型"
+  | "A管理型"
+  | "演技的表出フラグ";
 
-export interface Settings {
-  // 候補者の経歴情報入力モード
-  inputMode: "questions" | "resume" | "both";
-  // 選考段階の表示ラベル(StageIdとの対応)
-  stageLabels: Record<StageId, string>;
-  // 表示順
-  stageOrder: StageId[];
+export interface ASeparation {
+  internal: number; // 内的A(0-25)
+  external: number; // 表出A(0-25)
+  classification: AClassification;
+  frozen: boolean; // FZ-1 / FZ-2 が高い
+}
+
+// ============================================================
+// G4: 統合状態の直接検出
+// ============================================================
+export type IntegrationStatus =
+  | "本物の統合"
+  | "部分統合"
+  | "偽の中庸"
+  | "単独運転";
+
+export interface IntegrationDiagnosis {
+  observerScore: number; // 0-30
+  switchScore: number; // 0-30
+  index: number; // (observer + switch) / 2
+  status: IntegrationStatus;
+}
+
+// ============================================================
+// G3: 責任感の3形態
+// ============================================================
+export type ResponsibilityKind = "D型" | "B型" | "A型";
+
+export interface ResponsibilityDiagnosis {
+  scores: Record<ResponsibilityKind, number>; // 4-20点
+  primary: ResponsibilityKind;
+  secondary?: ResponsibilityKind; // 複合型の場合
+  isCompound: boolean;
+}
+
+// ============================================================
+// G5: 組織毀損プロファイル(内部出力のみ)
+// ============================================================
+export type OrgRiskCategory = "承認略奪型" | "ルール暴力型" | "衝動暴走型";
+
+export interface OrgRiskFlag {
+  category: OrgRiskCategory;
+  score: number; // 3-15点
+  level: "low" | "medium" | "high";
+}
+
+export interface OrgRiskDiagnosis {
+  flags: OrgRiskFlag[]; // 閾値超過したものだけ
+  hasAnyRisk: boolean;
+}
+
+// ============================================================
+// 統合診断結果(全部入り)
+// ============================================================
+export interface DiagnosticResult {
+  scores: AxisScores;
+  emotions: EmotionScores;
+  aSeparation: ASeparation;
+  integration: IntegrationDiagnosis;
+  responsibility: ResponsibilityDiagnosis;
+  orgRisk: OrgRiskDiagnosis; // 内部出力のみで使う
+  primaryType: QuadType;
+}
+
+// ============================================================
+// 診断回答(75問体系)
+// ============================================================
+export type LikertValue = 1 | 2 | 3 | 4 | 5;
+
+export interface DiagnosticAnswers {
+  // 軸スコア用(A-1〜A-8, B-1〜B-8, C-1〜C-8, D-1〜D-8)
+  axis: Record<string, LikertValue>;
+  // G2: A発火/表出(iA-1〜iA-5, eA-1〜eA-5, FZ-1, FZ-2)
+  aSeparation: Record<string, LikertValue>;
+  // G4: 統合状態(OB-1〜OB-5, SW-1〜SW-5)
+  integration: Record<string, LikertValue>;
+  // G3: 責任感(DR-1〜DR-4, BR-1〜BR-4, AR-1〜AR-4)
+  responsibility: Record<string, LikertValue>;
+  // G5: 組織毀損(AG-1〜AG-3, RV-1〜RV-3, IM-1〜IM-3)
+  orgRisk: Record<string, LikertValue>;
 }
 
 // ============================================================
@@ -70,22 +164,35 @@ export interface ResumeData {
   workHistory?: { company: string; period: string; role: string; description?: string }[];
   skills?: string[];
   selfPR?: string;
-  // 元アップロードファイル名
   fileName?: string;
+}
+
+// ============================================================
+// 採用ファネル段階
+// ============================================================
+export type StageId =
+  | "applied"
+  | "selection_1"
+  | "selection_2"
+  | "selection_final"
+  | "hired"
+  | "rejected";
+
+export interface Settings {
+  inputMode: "questions" | "resume" | "both";
+  stageLabels: Record<StageId, string>;
+  stageOrder: StageId[];
 }
 
 // ============================================================
 // 面接シート
 // ============================================================
 export interface InterviewRound {
-  stageId: StageId; // どの選考フェーズの面接か
+  stageId: StageId;
   date: string;
   interviewer: string;
-  // システムが提案した質問
   suggestedQuestions: string[];
-  // 面接官のメモ
   notes: string;
-  // この回の判定
   outcome: "pending" | "pass" | "fail" | "hold";
 }
 
@@ -95,18 +202,20 @@ export interface InterviewRound {
 export interface Diagnosis {
   date: string;
   scenario: "応募時" | "採用時" | "1年後" | "再診断";
-  answers: AxisKey[];
+  // 新75問体系の回答(オプション: seed データには無くてもよい)
+  answers?: DiagnosticAnswers;
   scores: AxisScores;
   emotions: EmotionScores;
   type: QuadType;
+  // 拡張診断データ(新フォーム経由ならフル、seedはオプション)
+  result?: DiagnosticResult;
 }
 
 // ============================================================
-// 応募者(採用ファネル中の人)
+// 応募者
 // ============================================================
 export interface Applicant {
   id: string;
-  // プロフィール(質問形式 or 履歴書解析の結果が入る)
   profile: {
     fullName: string;
     ageRange: string;
@@ -116,28 +225,21 @@ export interface Applicant {
     appliedPosition: string;
     appliedDate: string;
   };
-  // 経歴(質問形式 or 履歴書解析)
   resume?: ResumeData;
-  // 質問形式で答えた経歴(モードAの場合)
   careerAnswers?: {
     education: string;
     workHistory: string;
     selfPR: string;
   };
-  // 診断結果(応募時+必要に応じて再診断)
   diagnoses: Diagnosis[];
-  // 現在の段階
   currentStage: StageId;
-  // 選考フェーズの履歴
   interviews: InterviewRound[];
-  // タイプ判定キャッシュ(最新)
   presetTendency?: "A優位" | "D優位" | "B優位" | "統合";
-  // メモ
   generalNotes?: string;
 }
 
 // ============================================================
-// 1on1 ミーティング記録
+// 1on1
 // ============================================================
 export interface OneOnOne {
   id: string;
@@ -147,11 +249,11 @@ export interface OneOnOne {
   topics: string[];
   notes: string;
   nextActions?: string;
-  mood?: 1 | 2 | 3 | 4 | 5; // 本人の状態(本人申告 or 上司観察)
+  mood?: 1 | 2 | 3 | 4 | 5;
 }
 
 // ============================================================
-// 社員(採用後 = マネジメント対象)
+// 社員
 // ============================================================
 export interface Employee {
   id: string;
@@ -160,25 +262,31 @@ export interface Employee {
   gender: "男性" | "女性" | "その他";
   hireDate: string;
   currentRole: string;
-  team: string; // 例: "営業部" / "プロダクト開発" / "顧客対応"
+  team: string;
   manager: string;
-  // 採用時の応募者ID(リンク)
   fromApplicantId?: string;
-  // 診断履歴(採用時 / 半年 / 1年 / 2年など)
   diagnoses: Diagnosis[];
-  // 応募者から引き継いだプロフィール
   resume?: ResumeData;
   presetTendency?: "A優位" | "D優位" | "B優位" | "統合";
-  // 直近の状態
   status: "在籍" | "休職" | "退職";
-  // 直近の評価
   performance?: "S" | "A" | "B" | "C";
-  // 成長余地(リーダーシップ/専門性等の総合評価)
   potential?: "高" | "中" | "低";
 }
 
-export interface Question {
+// ============================================================
+// 質問体系
+// ============================================================
+export type QuestionCategory =
+  | "axis_A" | "axis_B" | "axis_C" | "axis_D"
+  | "iA" | "eA" | "FZ"
+  | "OB" | "SW"
+  | "DR" | "BR" | "AR"
+  | "AG" | "RV" | "IM";
+
+export interface DiagnosticQuestion {
   id: string;
   text: string;
-  options: { axis: AxisKey; label: string }[];
+  category: QuestionCategory;
+  kind: "core" | "support" | "reverse"; // 種別
+  weight: number; // 1.0 or 1.5
 }

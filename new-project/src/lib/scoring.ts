@@ -1,35 +1,295 @@
-import { QUESTIONS } from "./questions";
-import type { AxisKey, AxisScores, QuadType, EmotionScores } from "./types";
+// クアッドマインド診断 採点ロジック(完全仕様書 v1.0 準拠)
+// 出典: docs/theory/notes/2026-05-11-diagnostic-spec-v1.md
 
-const PER_QUESTION_POINTS = 25 / 9; // 9問×等重 → 各設問はおおよそ 2.78 点を 1 軸へ加算
+import {
+  AXIS_QUESTIONS,
+  A_SEPARATION_QUESTIONS,
+  FZ_QUESTIONS,
+  INTEGRATION_QUESTIONS,
+  RESPONSIBILITY_QUESTIONS,
+  ORG_RISK_QUESTIONS,
+} from "./questions";
+import type {
+  AxisKey,
+  AxisScores,
+  EmotionScores,
+  QuadType,
+  DiagnosticAnswers,
+  DiagnosticResult,
+  ASeparation,
+  AClassification,
+  IntegrationDiagnosis,
+  IntegrationStatus,
+  ResponsibilityDiagnosis,
+  ResponsibilityKind,
+  OrgRiskDiagnosis,
+  OrgRiskFlag,
+  OrgRiskCategory,
+  DiagnosticQuestion,
+  LikertValue,
+} from "./types";
 
-export function computeAxisScores(answers: AxisKey[]): AxisScores {
-  const scores: AxisScores = { A: 0, B: 0, C: 0, D: 0 };
-  for (const axis of answers) {
-    if (axis) scores[axis] += PER_QUESTION_POINTS;
+// ============================================================
+// 共通: 重み付きスコア計算 + 25点満点への正規化
+// ============================================================
+function weightedSum(
+  questions: DiagnosticQuestion[],
+  answers: Record<string, LikertValue>,
+): { raw: number; max: number } {
+  let raw = 0;
+  let max = 0;
+  for (const q of questions) {
+    const a = answers[q.id];
+    if (a === undefined) continue;
+    const reversed = q.kind === "reverse" ? 6 - a : a;
+    raw += reversed * q.weight;
+    max += 5 * q.weight;
   }
-  // 0..25 へクランプし整数丸め
-  (Object.keys(scores) as AxisKey[]).forEach((k) => {
-    scores[k] = Math.max(0, Math.min(25, Math.round(scores[k])));
+  return { raw, max };
+}
+
+function scaleTo(rawSum: { raw: number; max: number }, target: number): number {
+  if (rawSum.max === 0) return 0;
+  return Math.round((rawSum.raw / rawSum.max) * target);
+}
+
+// ============================================================
+// A軸〜D軸スコア(25点満点)
+// ============================================================
+export function computeAxisScores(answers: DiagnosticAnswers): AxisScores {
+  const result: AxisScores = { A: 0, B: 0, C: 0, D: 0 };
+  (["A", "B", "C", "D"] as AxisKey[]).forEach((axis) => {
+    const qs = AXIS_QUESTIONS.filter((q) => q.category === `axis_${axis}`);
+    result[axis] = scaleTo(weightedSum(qs, answers.axis), 25);
   });
-  return scores;
+  return result;
 }
 
-export function judgeType(scores: AxisScores): QuadType {
-  const { A, B, C, D } = scores;
-  const max = Math.max(A, B, C, D);
-  const min = Math.min(A, B, C, D);
+// ============================================================
+// G2: A発火/A表出分離(25点満点)
+// ============================================================
+export function computeASeparation(answers: DiagnosticAnswers): ASeparation {
+  const iAQs = A_SEPARATION_QUESTIONS.filter((q) => q.category === "iA");
+  const eAQs = A_SEPARATION_QUESTIONS.filter((q) => q.category === "eA");
+  const internal = scaleTo(weightedSum(iAQs, answers.aSeparation), 25);
+  const external = scaleTo(weightedSum(eAQs, answers.aSeparation), 25);
 
-  // 統合型: 全軸15以上かつ最大-最小<8
-  if (A >= 15 && B >= 15 && C >= 15 && D >= 15 && max - min < 8) {
-    return "統合型";
+  // FZ判定: 内的A高 × 表出A低 のみFZ問題が回答されている
+  const fzAnswers = FZ_QUESTIONS.filter((q) => answers.aSeparation[q.id] !== undefined);
+  const fzAvg =
+    fzAnswers.length > 0
+      ? fzAnswers.reduce((s, q) => s + (answers.aSeparation[q.id] ?? 0), 0) / fzAnswers.length
+      : 0;
+  const frozen = fzAvg >= 3.5; // 平均3.5以上で凍結フラグ
+
+  let classification: AClassification;
+  const INTERNAL_THRESHOLD = 13;
+  const EXTERNAL_THRESHOLD = 13;
+
+  if (internal < INTERNAL_THRESHOLD && external < EXTERNAL_THRESHOLD) {
+    classification = "真性A低";
+  } else if (internal >= INTERNAL_THRESHOLD && external < EXTERNAL_THRESHOLD) {
+    classification = frozen ? "A凍結型" : "A抑圧型";
+  } else if (internal >= INTERNAL_THRESHOLD && external >= EXTERNAL_THRESHOLD) {
+    classification = "A管理型";
+  } else {
+    classification = "演技的表出フラグ";
   }
-  if (D === max && A < 12) return "理詰め型";
-  if (B === max && C < 12) return "承認欲求型";
-  if (A === max && B < 12) return "ワガママ型";
-  return "混合型";
+
+  return { internal, external, classification, frozen };
 }
 
+// ============================================================
+// G4: 統合状態の直接検出
+// ============================================================
+export function computeIntegration(
+  answers: DiagnosticAnswers,
+  axisScores: AxisScores,
+): IntegrationDiagnosis {
+  const obQs = INTEGRATION_QUESTIONS.filter((q) => q.category === "OB");
+  const swQs = INTEGRATION_QUESTIONS.filter((q) => q.category === "SW");
+  // 各セクション 30点満点に正規化
+  const observerScore = scaleTo(weightedSum(obQs, answers.integration), 30);
+  const switchScore = scaleTo(weightedSum(swQs, answers.integration), 30);
+  const index = (observerScore + switchScore) / 2;
+
+  const allAxes = [axisScores.A, axisScores.B, axisScores.C, axisScores.D];
+  const allBalanced = allAxes.every((v) => v >= 13);
+  const anyLow = allAxes.some((v) => v < 10);
+  const max = Math.max(...allAxes);
+  const min = Math.min(...allAxes);
+  const isBalanced = max - min < 8;
+
+  let status: IntegrationStatus;
+  if (index >= 20 && allBalanced) {
+    status = "本物の統合";
+  } else if (index >= 20 && anyLow) {
+    status = "部分統合";
+  } else if (index < 15 && isBalanced) {
+    status = "偽の中庸";
+  } else {
+    status = "単独運転";
+  }
+
+  return { observerScore, switchScore, index, status };
+}
+
+// ============================================================
+// G3: 責任感の3形態
+// ============================================================
+export function computeResponsibility(
+  answers: DiagnosticAnswers,
+): ResponsibilityDiagnosis {
+  const drQs = RESPONSIBILITY_QUESTIONS.filter((q) => q.category === "DR");
+  const brQs = RESPONSIBILITY_QUESTIONS.filter((q) => q.category === "BR");
+  const arQs = RESPONSIBILITY_QUESTIONS.filter((q) => q.category === "AR");
+  // 各4問×1〜5 = 4〜20点
+  const drSum = drQs.reduce((s, q) => s + (answers.responsibility[q.id] ?? 0), 0);
+  const brSum = brQs.reduce((s, q) => s + (answers.responsibility[q.id] ?? 0), 0);
+  const arSum = arQs.reduce((s, q) => s + (answers.responsibility[q.id] ?? 0), 0);
+
+  const scores: Record<ResponsibilityKind, number> = {
+    D型: drSum,
+    B型: brSum,
+    A型: arSum,
+  };
+
+  const sorted = (Object.keys(scores) as ResponsibilityKind[]).sort(
+    (a, b) => scores[b] - scores[a],
+  );
+  const primary = sorted[0];
+  const secondary = sorted[1];
+  const isCompound = scores[primary] - scores[secondary] < 3;
+
+  return {
+    scores,
+    primary,
+    secondary: isCompound ? secondary : undefined,
+    isCompound,
+  };
+}
+
+// ============================================================
+// G5: 組織毀損プロファイル
+// ============================================================
+function computeRiskCategory(
+  category: OrgRiskCategory,
+  prefix: "AG" | "RV" | "IM",
+  answers: DiagnosticAnswers,
+): OrgRiskFlag | null {
+  const qs = ORG_RISK_QUESTIONS.filter((q) => q.category === prefix);
+  const sum = qs.reduce((s, q) => s + (answers.orgRisk[q.id] ?? 0), 0);
+  // 3問×1〜5 = 3〜15点
+  let level: "low" | "medium" | "high";
+  if (sum >= 12) level = "high";
+  else if (sum >= 9) level = "medium";
+  else return null; // 閾値未満ならフラグ立てない
+  return { category, score: sum, level };
+}
+
+export function computeOrgRisk(answers: DiagnosticAnswers): OrgRiskDiagnosis {
+  const flags: OrgRiskFlag[] = [];
+  const ag = computeRiskCategory("承認略奪型", "AG", answers);
+  const rv = computeRiskCategory("ルール暴力型", "RV", answers);
+  const im = computeRiskCategory("衝動暴走型", "IM", answers);
+  if (ag) flags.push(ag);
+  if (rv) flags.push(rv);
+  if (im) flags.push(im);
+  return { flags, hasAnyRisk: flags.length > 0 };
+}
+
+// ============================================================
+// G6: 12タイプ判定(優先順位付き)
+// ============================================================
+export function judgeType(
+  scores: AxisScores,
+  aSep: ASeparation,
+  integration: IntegrationDiagnosis,
+  orgRisk: OrgRiskDiagnosis,
+): QuadType {
+  // 1. 癌候補フラグは最優先(注: 本人向け出力ではこの型名を見せない)
+  //    high レベルの組織毀損があれば、専門的ラベルとして残す
+  //    ※ 実際の表示は呼び出し側で「内部出力」と「外部出力」を分ける
+
+  // 2. A発火/表出の乖離(A抑圧/A凍結が高優先)
+  if (aSep.classification === "A凍結型") return "A凍結型";
+  if (aSep.classification === "A抑圧型") return "A抑圧型";
+
+  // 3. 統合状態
+  if (integration.status === "本物の統合") return "統合型";
+  if (integration.status === "偽の中庸") return "中庸偽装型";
+
+  // 4. 単独運転(一軸突出 + 他が低い)
+  const sorted = (Object.keys(scores) as AxisKey[]).sort(
+    (a, b) => scores[b] - scores[a],
+  );
+  const top = sorted[0];
+  const second = sorted[1];
+  const minVal = scores[sorted[3]];
+  if (scores[top] >= 20 && minVal < 10) {
+    return "単独運転型";
+  }
+
+  // 5. 主軸×副軸での6タイプ分類
+  // 突破型: A主軸 + C副軸
+  // 共感型: B主軸 + C副軸
+  // 設計型: D主軸 + C副軸
+  // 忠実型: B主軸 + D副軸
+  // 直感型: C主軸 + A副軸
+  // 分析型: D主軸 + B副軸
+  // 蓄積型: C主軸 + B副軸
+  const combo = `${top}+${second}`;
+  switch (combo) {
+    case "A+C":
+      return "突破型";
+    case "B+C":
+      return "共感型";
+    case "D+C":
+      return "設計型";
+    case "B+D":
+      return "忠実型";
+    case "C+A":
+      return "直感型";
+    case "D+B":
+      return "分析型";
+    case "C+B":
+      return "蓄積型";
+  }
+
+  // フォールバック: 主軸ベースで最も近い
+  if (top === "A") return "突破型";
+  if (top === "B") return "共感型";
+  if (top === "C") return "直感型";
+  return "設計型";
+}
+
+// ============================================================
+// 統合: 全診断結果を一気に計算
+// ============================================================
+export function computeFullDiagnosis(
+  answers: DiagnosticAnswers,
+  emotions: EmotionScores,
+): DiagnosticResult {
+  const scores = computeAxisScores(answers);
+  const aSeparation = computeASeparation(answers);
+  const integration = computeIntegration(answers, scores);
+  const responsibility = computeResponsibility(answers);
+  const orgRisk = computeOrgRisk(answers);
+  const primaryType = judgeType(scores, aSeparation, integration, orgRisk);
+  return {
+    scores,
+    emotions,
+    aSeparation,
+    integration,
+    responsibility,
+    orgRisk,
+    primaryType,
+  };
+}
+
+// ============================================================
+// ユーティリティ
+// ============================================================
 export function dominantAxis(scores: AxisScores): AxisKey {
   let best: AxisKey = "A";
   let max = -Infinity;
@@ -46,7 +306,13 @@ export function defaultEmotionScores(): EmotionScores {
   return { fear: 3, sadness: 3, anger: 3, joy: 3, happiness: 3 };
 }
 
-// 1年後シナリオ差分(デモ用簡易): 配置・環境ストレスに応じた典型的変化パターン
+// ============================================================
+// 旧 Q1-Q9 互換性のための関数(段階的廃止)
+// ============================================================
+export function legacyComputeAxisScores(): AxisScores {
+  return { A: 0, B: 0, C: 0, D: 0 };
+}
+
 export interface YearLaterPattern {
   label: string;
   description: string;
@@ -58,44 +324,50 @@ export function suggestYearLaterPattern(
   scores: AxisScores,
   type: QuadType,
 ): YearLaterPattern {
-  if (type === "理詰め型") {
+  // 12タイプ対応のパターン例
+  if (type === "突破型") {
     return {
-      label: "適応進行(D偏重→統合方向)",
-      description:
-        "論理一辺倒だった姿勢から、現場で人間関係や直感判断が必要な場面を重ねて、A・Cが伸びてDが少し下がる典型的な統合パターン。",
-      delta: { A: 4, B: 2, C: 3, D: -4 },
-      emotionDelta: { fear: -1, joy: 1, happiness: 1 },
+      label: "突破→統合進化",
+      description: "Aの熱量にCの精度が乗り、突破型から統合型への進化が見えている。",
+      delta: { A: -1, B: 3, C: 3, D: 4 },
+      emotionDelta: { joy: 1, happiness: 1 },
     };
   }
-  if (type === "承認欲求型") {
+  if (type === "共感型") {
     return {
-      label: "自己軸の獲得(B偏重→C/A補強)",
-      description:
-        "他者評価に依存していた状態から、自分なりの判断基準が育ちつつある段階。Bが少し下がりCが伸びる、内的安定の指標。",
-      delta: { A: 2, B: -3, C: 4, D: 1 },
-      emotionDelta: { fear: -1, joy: 1, happiness: 1 },
+      label: "自己軸の獲得",
+      description: "B依存から自己軸が育ち、C/Dとのバランスが取れてきた。",
+      delta: { A: 2, B: -2, C: 3, D: 2 },
+      emotionDelta: { fear: -1, joy: 1 },
     };
   }
-  if (type === "ワガママ型") {
+  if (type === "設計型") {
     return {
-      label: "社会化進行(A偏重→B/D補強)",
-      description:
-        "感情主導から、組織の中で機能するためにB(他者調整)とD(計画性)が伸びる。Aは大きく失わずバランスが整う。",
-      delta: { A: -2, B: 4, C: 1, D: 3 },
-      emotionDelta: { anger: -1, joy: 1 },
+      label: "感情接続の獲得",
+      description: "Dの精度にA/Cが補強され、人との関係性も含めた設計ができるようになった。",
+      delta: { A: 4, B: 2, C: 3, D: -2 },
+      emotionDelta: { joy: 1, happiness: 1 },
+    };
+  }
+  if (type === "A抑圧型") {
+    return {
+      label: "解放方向への進化",
+      description: "安全な表出環境でAを解放しつつあり、B依存も和らいできた。",
+      delta: { A: 3, B: -2, C: 2, D: 1 },
+      emotionDelta: { fear: -2, joy: 2 },
     };
   }
   if (type === "統合型") {
     return {
       label: "統合の深化",
-      description: "既に統合的だが、現業務でC(直感)がさらに磨かれる方向。",
-      delta: { A: 1, B: 1, C: 3, D: 0 },
+      description: "Cがさらに磨かれ、現場判断の精度が上がっている。",
+      delta: { A: 1, B: 1, C: 3, D: 1 },
       emotionDelta: { happiness: 1 },
     };
   }
   return {
-    label: "現職での緩やかな変化",
-    description: "顕著な偏りがないため、現業務の特性に応じて軽微な変化が起こる想定。",
+    label: "緩やかな進化",
+    description: "現業務での経験を通じた典型的変化。",
     delta: { A: 1, B: 1, C: 2, D: 1 },
     emotionDelta: { joy: 1 },
   };

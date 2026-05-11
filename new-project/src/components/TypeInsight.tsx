@@ -7,6 +7,13 @@ const TONE: Record<string, { bar: string; chip: string; bg: string; border: stri
   emerald: { bar: "bg-gradient-to-r from-emerald-300 to-emerald-500", chip: "bg-emerald-50 text-emerald-700 border-emerald-200", bg: "bg-emerald-50/40", border: "border-emerald-200" },
   blue: { bar: "bg-gradient-to-r from-blue-300 to-blue-500", chip: "bg-blue-50 text-blue-700 border-blue-200", bg: "bg-blue-50/40", border: "border-blue-200" },
   slate: { bar: "bg-gradient-to-r from-slate-300 to-slate-500", chip: "bg-slate-50 text-slate-700 border-slate-200", bg: "bg-slate-50/40", border: "border-slate-200" },
+  purple: { bar: "bg-gradient-to-r from-purple-300 to-purple-500", chip: "bg-purple-50 text-purple-700 border-purple-200", bg: "bg-purple-50/40", border: "border-purple-200" },
+  cyan: { bar: "bg-gradient-to-r from-cyan-300 to-cyan-500", chip: "bg-cyan-50 text-cyan-700 border-cyan-200", bg: "bg-cyan-50/40", border: "border-cyan-200" },
+  indigo: { bar: "bg-gradient-to-r from-indigo-300 to-indigo-500", chip: "bg-indigo-50 text-indigo-700 border-indigo-200", bg: "bg-indigo-50/40", border: "border-indigo-200" },
+  pink: { bar: "bg-gradient-to-r from-pink-300 to-pink-500", chip: "bg-pink-50 text-pink-700 border-pink-200", bg: "bg-pink-50/40", border: "border-pink-200" },
+  yellow: { bar: "bg-gradient-to-r from-yellow-300 to-yellow-500", chip: "bg-yellow-50 text-yellow-700 border-yellow-200", bg: "bg-yellow-50/40", border: "border-yellow-200" },
+  gray: { bar: "bg-gradient-to-r from-gray-300 to-gray-500", chip: "bg-gray-50 text-gray-700 border-gray-300", bg: "bg-gray-50/40", border: "border-gray-200" },
+  lime: { bar: "bg-gradient-to-r from-lime-300 to-lime-500", chip: "bg-lime-50 text-lime-700 border-lime-200", bg: "bg-lime-50/40", border: "border-lime-200" },
 };
 
 interface Props {
@@ -102,6 +109,12 @@ export function TypeInsight({ type, variant = "full" }: Props) {
             </div>
             <p className="text-xs text-slate-700 leading-relaxed">{desc.managementHint}</p>
           </div>
+        </div>
+        <div className="pt-3 border-t border-slate-200/70">
+          <div className="text-[10px] tracking-widest uppercase text-slate-500 font-semibold mb-1.5">
+            成長の方向
+          </div>
+          <p className="text-xs text-slate-700 leading-relaxed">{desc.growthDirection}</p>
         </div>
       </div>
     </div>

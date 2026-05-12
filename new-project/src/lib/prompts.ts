@@ -361,3 +361,179 @@ A: ${args.scoresT2.A}/25, B: ${args.scoresT2.B}/25, C: ${args.scoresT2.C}/25, D:
 
 変化の解釈と配置最適化提案を出してください。`;
 }
+
+// ============================================
+// AI個別分析(PersonalInsight)
+// 診断結果 × 経歴 × 第2層変数 から、その個人専用のタイプ説明を生成する。
+// TYPE_DESCRIPTIONS と同じ7フィールド(headline/summary/strengths/cautions/
+// bestFitRoles/managementHint/growthDirection)を JSON で出力する。
+// ============================================
+export const PERSONAL_INSIGHT_SYSTEM = `あなたはクアッドマインド理論を理解し、診断結果と経歴情報を統合して、個人専用の分析レポートを生成する専門アシスタントです。
+
+【目的】
+静的な「このタイプの傾向(詳細)」テンプレを置き換える、その個人専用の分析を生成する。
+同じタイプ判定(例:A抑圧型)の人でも、スコア配分・経歴・第2層変数(Response Style 等)が違えば違う文章が出る。
+
+【守るべき構造】
+出力は必ず厳密な JSON フォーマット。マークダウンや前置きは絶対に出力しない。
+以下7フィールドを全て埋める:
+
+{
+  "headline":        "30文字程度の一行サマリー(タイプ名 + 個別性を1つだけ含める)",
+  "summary":         "150〜250字の文章(スコア配分と経歴文脈を踏まえた個別解説)",
+  "strengths":       ["強み1(経歴とスコアの組合せ)", "強み2", "強み3"],
+  "cautions":        ["注意1(個別のリスク)", "注意2", "注意3"],
+  "bestFitRoles":    ["適合役割1(経歴に合わせた具体例)", "適合役割2", "適合役割3"],
+  "managementHint":  "管理者向け 1〜2文(その個人にどう接するべきか)",
+  "growthDirection": "成長方向 1〜2文(本人がどう次のステップを踏むべきか)"
+}
+
+【書き方の指針】
+- 「A抑圧型は一般にバーンアウト高リスク」のような汎用記述は禁止
+- 必ず数値(例: 内的A=14.6 vs 表出A=9.8)、Response Style(穏当/極端/中立)、経歴(具体的な職歴・自己PR)を文章に組み込む
+- 同じタイプでも「あなたは B=22.5 が突出しているので○○」のように個別根拠を入れる
+- 第2層変数の警告(Neutral 30%超など)があれば必ず触れる
+- 偽善的な賛美や過度に病理化する表現は避ける
+- 平易だが理論的に正確な日本語
+
+【絶対NG】
+- JSON 以外の出力(コードブロック、説明文、コメント)
+- 一般論だけで個人固有の数値・経歴を引用しない
+- 「あなたは典型的な〜です」のような没個性な書き出し
+- 評価判定(良い/悪い)。あくまで構造解釈
+
+JSON 以外を出力した場合、システムが解釈不能になりプロダクトが壊れる。必ず JSON のみ。`;
+
+export interface PersonalInsightInput {
+  type: QuadType;
+  scores: AxisScores;
+  emotions: EmotionScores;
+  profile: {
+    fullName: string;
+    ageRange: string;
+    gender: string;
+    appliedPosition: string;
+  };
+  career?: {
+    education?: string;
+    workHistory?: string;
+    selfPR?: string;
+  };
+  aSeparation?: {
+    internal: number;
+    external: number;
+    classification: string;
+    frozen: boolean;
+  };
+  integration?: {
+    observerScore: number;
+    switchScore: number;
+    index: number;
+    status: string;
+  };
+  responsibility?: {
+    primary: string;
+    isCompound: boolean;
+    secondary?: string;
+  };
+  responseStyle?: {
+    style: string;
+    mean: number;
+    extremeRatio: number;
+    neutralRatio: number;
+    warnings: string[];
+  };
+  neutralFrequency?: {
+    ratio: number;
+    highFlag: boolean;
+  };
+  correlationCorrection?: {
+    pureC: number;
+    pureD: number;
+    adjustedA: number;
+    adjustedB: number;
+  };
+  timings?: {
+    medianMs: number;
+    speedProfile: string;
+    longConsideredQuestions: string[];
+  };
+}
+
+export function personalInsightUser(input: PersonalInsightInput): string {
+  const lines: string[] = [];
+  lines.push(`【対象者】`);
+  lines.push(`氏名: ${input.profile.fullName}`);
+  lines.push(`年代/性別: ${input.profile.ageRange} ${input.profile.gender}`);
+  lines.push(`応募職種: ${input.profile.appliedPosition}`);
+  lines.push("");
+  lines.push(`【タイプ判定】 ${input.type}`);
+  lines.push("");
+  lines.push(`【A/B/C/D スコア(各 0-25)】`);
+  for (const k of ["A", "B", "C", "D"] as AxisKey[]) {
+    lines.push(`  ${k}(${AXIS_LABEL_JA[k]}): ${input.scores[k]}`);
+  }
+  lines.push("");
+  lines.push(`【5感情(各 1-5)】`);
+  for (const k of ["fear", "sadness", "anger", "joy", "happiness"] as const) {
+    lines.push(`  ${EMOTION_LABEL_JA[k]}: ${input.emotions[k]}`);
+  }
+  if (input.aSeparation) {
+    lines.push("");
+    lines.push(`【G2: A発火/表出分離】`);
+    lines.push(`  内的A: ${input.aSeparation.internal} / 25`);
+    lines.push(`  表出A: ${input.aSeparation.external} / 25`);
+    lines.push(`  判定: ${input.aSeparation.classification}${input.aSeparation.frozen ? " (★凍結フラグ)" : ""}`);
+  }
+  if (input.integration) {
+    lines.push("");
+    lines.push(`【G4: 統合状態】`);
+    lines.push(`  Observer起動: ${input.integration.observerScore} / 30`);
+    lines.push(`  切り替え自覚: ${input.integration.switchScore} / 30`);
+    lines.push(`  統合指数: ${input.integration.index.toFixed(1)} / 判定: ${input.integration.status}`);
+  }
+  if (input.responsibility) {
+    lines.push("");
+    lines.push(`【G3: 責任感】 主: ${input.responsibility.primary}${input.responsibility.isCompound ? ` × ${input.responsibility.secondary}(複合型)` : ""}`);
+  }
+  if (input.responseStyle) {
+    lines.push("");
+    lines.push(`【第2層: Response Style】`);
+    lines.push(`  スタイル: ${input.responseStyle.style}`);
+    lines.push(`  全回答の平均値: ${input.responseStyle.mean}`);
+    lines.push(`  極端度(1か5の率): ${(input.responseStyle.extremeRatio * 100).toFixed(0)}%`);
+    lines.push(`  中立度(3の率): ${(input.responseStyle.neutralRatio * 100).toFixed(0)}%`);
+    if (input.responseStyle.warnings.length > 0) {
+      lines.push(`  警告: ${input.responseStyle.warnings.join(" / ")}`);
+    }
+  }
+  if (input.neutralFrequency && input.neutralFrequency.highFlag) {
+    lines.push("");
+    lines.push(`【第2層: Neutral Frequency 高フラグ】 中立(3)選択率 ${(input.neutralFrequency.ratio * 100).toFixed(0)}% (>30%)`);
+  }
+  if (input.correlationCorrection) {
+    lines.push("");
+    lines.push(`【第2層: 軸間相関補正】 純粋C=${input.correlationCorrection.pureC} / 純粋D=${input.correlationCorrection.pureD} / 補正A=${input.correlationCorrection.adjustedA} / 補正B=${input.correlationCorrection.adjustedB}`);
+  }
+  if (input.timings) {
+    lines.push("");
+    lines.push(`【第2層: 回答時間】 中央値 ${(input.timings.medianMs / 1000).toFixed(1)}秒 / プロファイル: ${input.timings.speedProfile}`);
+    if (input.timings.longConsideredQuestions.length > 0) {
+      lines.push(`  長考した質問: ${input.timings.longConsideredQuestions.join(", ")}`);
+    }
+  }
+  if (input.career) {
+    lines.push("");
+    lines.push(`【経歴情報】`);
+    if (input.career.education) lines.push(`■ 学歴\n${input.career.education}`);
+    if (input.career.workHistory) lines.push(`■ 職務経歴\n${input.career.workHistory}`);
+    if (input.career.selfPR) lines.push(`■ 自己PR\n${input.career.selfPR}`);
+  } else {
+    lines.push("");
+    lines.push(`【経歴情報】 未提出`);
+  }
+  lines.push("");
+  lines.push(`以上の情報を統合し、${input.profile.fullName} 個人専用の分析を上記の JSON 形式で出力してください。`);
+  lines.push(`必ず JSON のみを出力し、それ以外のテキスト・コードブロック・コメントは一切含めないこと。`);
+  return lines.join("\n");
+}

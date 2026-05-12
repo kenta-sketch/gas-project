@@ -12,7 +12,7 @@ import { StageBadge } from "@/components/StageBadge";
 import { TypeInsight } from "@/components/TypeInsight";
 import { DiagnosticInsight } from "@/components/DiagnosticInsight";
 import { AXIS_LABEL_JA } from "@/lib/types";
-import type { Applicant, InterviewRound, Settings, StageId } from "@/lib/types";
+import type { Applicant, InterviewRound, PersonalInsight, Settings, StageId } from "@/lib/types";
 
 type Tab = "overview" | "diagnosis" | "career" | "interview" | "decision";
 
@@ -108,7 +108,7 @@ export default function ApplicantDetailPage({
 
       {tab === "overview" && <OverviewTab applicant={applicant} />}
       {tab === "career" && <CareerTab applicant={applicant} />}
-      {tab === "diagnosis" && latest && <DiagnosisTab applicant={applicant} />}
+      {tab === "diagnosis" && latest && <DiagnosisTab applicant={applicant} onUpdate={refresh} />}
       {tab === "interview" && <InterviewTab applicant={applicant} onUpdate={refresh} />}
       {tab === "decision" && <DecisionTab applicant={applicant} settings={settings} onMove={moveStage} />}
     </div>
@@ -235,8 +235,9 @@ function CareerTab({ applicant }: { applicant: Applicant }) {
 // ──────────────────────────────────────────
 // 診断結果タブ
 // ──────────────────────────────────────────
-function DiagnosisTab({ applicant }: { applicant: Applicant }) {
-  const latest = applicant.diagnoses[applicant.diagnoses.length - 1];
+function DiagnosisTab({ applicant, onUpdate }: { applicant: Applicant; onUpdate: () => void }) {
+  const latestIdx = applicant.diagnoses.length - 1;
+  const latest = applicant.diagnoses[latestIdx];
   if (!latest) return <div>診断未実施</div>;
   return (
     <div className="space-y-5">
@@ -275,10 +276,245 @@ function DiagnosisTab({ applicant }: { applicant: Applicant }) {
           <DiagnosticInsight result={latest.result} internal={true} />
         </section>
       )}
-      <section>
-        <TypeInsight type={latest.type} variant="full" />
-      </section>
+      <PersonalInsightSection applicant={applicant} diagnosisIdx={latestIdx} onUpdate={onUpdate} />
     </div>
+  );
+}
+
+// ──────────────────────────────────────────
+// AI個別分析セクション(診断結果タブ下部)
+// 静的テンプレ(TypeInsight)を AI 生成の PersonalInsight に置き換え
+// 一度生成したら applicant.diagnoses[i].personalInsight にキャッシュ
+// ──────────────────────────────────────────
+function PersonalInsightSection({
+  applicant,
+  diagnosisIdx,
+  onUpdate,
+}: {
+  applicant: Applicant;
+  diagnosisIdx: number;
+  onUpdate: () => void;
+}) {
+  const diagnosis = applicant.diagnoses[diagnosisIdx];
+  const insight = diagnosis?.personalInsight;
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function generate() {
+    if (!diagnosis) return;
+    setError(null);
+    setGenerating(true);
+    try {
+      const body = {
+        type: diagnosis.type,
+        scores: diagnosis.scores,
+        emotions: diagnosis.emotions,
+        profile: {
+          fullName: applicant.profile.fullName,
+          ageRange: applicant.profile.ageRange,
+          gender: applicant.profile.gender,
+          appliedPosition: applicant.profile.appliedPosition,
+        },
+        career: applicant.careerAnswers
+          ? {
+              education: applicant.careerAnswers.education,
+              workHistory: applicant.careerAnswers.workHistory,
+              selfPR: applicant.careerAnswers.selfPR,
+            }
+          : applicant.resume
+            ? {
+                education: applicant.resume.education?.map((e) => `${e.school}(${e.period})${e.degree ? " " + e.degree : ""}`).join("\n"),
+                workHistory: applicant.resume.workHistory?.map((w) => `${w.company}(${w.period}, ${w.role})${w.description ? " - " + w.description : ""}`).join("\n"),
+                selfPR: applicant.resume.selfPR,
+              }
+            : undefined,
+        aSeparation: diagnosis.result?.aSeparation
+          ? {
+              internal: diagnosis.result.aSeparation.internal,
+              external: diagnosis.result.aSeparation.external,
+              classification: diagnosis.result.aSeparation.classification,
+              frozen: diagnosis.result.aSeparation.frozen,
+            }
+          : undefined,
+        integration: diagnosis.result?.integration
+          ? {
+              observerScore: diagnosis.result.integration.observerScore,
+              switchScore: diagnosis.result.integration.switchScore,
+              index: diagnosis.result.integration.index,
+              status: diagnosis.result.integration.status,
+            }
+          : undefined,
+        responsibility: diagnosis.result?.responsibility
+          ? {
+              primary: diagnosis.result.responsibility.primary,
+              isCompound: diagnosis.result.responsibility.isCompound,
+              secondary: diagnosis.result.responsibility.secondary,
+            }
+          : undefined,
+        responseStyle: diagnosis.result?.responseStyle
+          ? {
+              style: diagnosis.result.responseStyle.style,
+              mean: diagnosis.result.responseStyle.mean,
+              extremeRatio: diagnosis.result.responseStyle.extremeRatio,
+              neutralRatio: diagnosis.result.responseStyle.neutralRatio,
+              warnings: diagnosis.result.responseStyle.warnings,
+            }
+          : undefined,
+        neutralFrequency: diagnosis.result?.neutralFrequency
+          ? {
+              ratio: diagnosis.result.neutralFrequency.ratio,
+              highFlag: diagnosis.result.neutralFrequency.highFlag,
+            }
+          : undefined,
+        correlationCorrection: diagnosis.result?.correlationCorrection
+          ? {
+              pureC: diagnosis.result.correlationCorrection.pureC,
+              pureD: diagnosis.result.correlationCorrection.pureD,
+              adjustedA: diagnosis.result.correlationCorrection.adjustedA,
+              adjustedB: diagnosis.result.correlationCorrection.adjustedB,
+            }
+          : undefined,
+        timings: diagnosis.result?.timings
+          ? {
+              medianMs: diagnosis.result.timings.medianMs,
+              speedProfile: diagnosis.result.timings.speedProfile,
+              longConsideredQuestions: diagnosis.result.timings.longConsideredQuestions,
+            }
+          : undefined,
+      };
+      const res = await fetch("/api/personal-insight", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        setError(data.error ?? `APIエラー (${res.status})`);
+        return;
+      }
+      const newInsight = data.insight as PersonalInsight;
+      // applicant.diagnoses[diagnosisIdx].personalInsight に保存
+      const updatedDiagnoses = applicant.diagnoses.map((d, i) =>
+        i === diagnosisIdx ? { ...d, personalInsight: newInsight } : d,
+      );
+      upsertApplicant({ ...applicant, diagnoses: updatedDiagnoses });
+      onUpdate();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  return (
+    <section className="bg-gradient-to-br from-brand-50/30 to-white border border-brand-200 rounded-2xl p-5 shadow-soft">
+      <div className="flex items-baseline justify-between mb-3">
+        <div>
+          <div className="text-[10px] tracking-[0.25em] uppercase text-brand-700 font-bold">
+            AI個別分析
+          </div>
+          <h3 className="text-base font-bold text-slate-900 mt-0.5">
+            {insight ? "この応募者専用のタイプ説明(AI生成)" : "AI個別分析を生成"}
+          </h3>
+        </div>
+        <button
+          onClick={generate}
+          disabled={generating}
+          className={
+            "text-xs px-3 py-1.5 rounded font-bold transition-colors " +
+            (generating
+              ? "bg-slate-200 text-slate-500"
+              : insight
+                ? "bg-white border border-brand-300 text-brand-700 hover:bg-brand-50"
+                : "bg-brand-gradient text-white hover:shadow-md")
+          }
+        >
+          {generating ? "AIが分析中..." : insight ? "再生成" : "AIで個別分析を生成"}
+        </button>
+      </div>
+
+      {!insight && !generating && (
+        <p className="text-sm text-slate-600 leading-relaxed">
+          診断結果(A/B/C/D・5感情・G2/G3/G4/G5・第2層変数)と経歴情報を統合し、
+          Claude がこの応募者専用の分析を生成します。同じタイプ判定の人でも、
+          スコア配分や経歴が違えば違う文章が出ます。
+          <br />
+          <span className="text-xs text-slate-500 mt-1 inline-block">
+            ※ 一度生成した結果はキャッシュされます。再生成ボタンで上書き可能。
+          </span>
+        </p>
+      )}
+
+      {error && (
+        <div className="bg-rose-50 border border-rose-200 rounded p-3 text-xs text-rose-700">
+          ⚠ {error}
+        </div>
+      )}
+
+      {insight && (
+        <div className="space-y-4 mt-2">
+          <div>
+            <h4 className="text-lg font-bold text-slate-900 leading-snug">{insight.headline}</h4>
+            <p className="text-sm text-slate-700 leading-relaxed mt-2 whitespace-pre-line">
+              {insight.summary}
+            </p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <div className="text-xs font-bold text-emerald-700 mb-1.5 flex items-center gap-1">
+                <span>◎</span>強み
+              </div>
+              <ul className="text-sm text-slate-700 space-y-1 pl-4 list-disc">
+                {insight.strengths.map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <div className="text-xs font-bold text-amber-700 mb-1.5 flex items-center gap-1">
+                <span>⚠</span>気をつけたいシグナル
+              </div>
+              <ul className="text-sm text-slate-700 space-y-1 pl-4 list-disc">
+                {insight.cautions.map((c, i) => (
+                  <li key={i}>{c}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 pt-3 border-t border-brand-200/50">
+            <div>
+              <div className="text-[10px] tracking-widest uppercase text-slate-500 font-semibold mb-1.5">
+                適合度の高い役割
+              </div>
+              <ul className="text-sm text-slate-700 space-y-1 pl-4 list-disc">
+                {insight.bestFitRoles.map((r, i) => (
+                  <li key={i}>{r}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <div className="text-[10px] tracking-widest uppercase text-slate-500 font-semibold mb-1.5">
+                マネジメントのヒント
+              </div>
+              <p className="text-sm text-slate-700 leading-relaxed">{insight.managementHint}</p>
+            </div>
+          </div>
+
+          <div className="pt-3 border-t border-brand-200/50">
+            <div className="text-[10px] tracking-widest uppercase text-slate-500 font-semibold mb-1.5">
+              成長の方向
+            </div>
+            <p className="text-sm text-slate-700 leading-relaxed">{insight.growthDirection}</p>
+          </div>
+
+          <div className="text-[10px] text-slate-400 text-right pt-2 border-t border-slate-100">
+            生成: {new Date(insight.generatedAt).toLocaleString("ja-JP")}{insight.modelVersion ? ` · ${insight.modelVersion}` : ""}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

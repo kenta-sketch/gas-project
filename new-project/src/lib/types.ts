@@ -201,6 +201,22 @@ export interface ResponseTimings {
 }
 
 // ============================================================
+// AI個別分析:診断結果 × 経歴 × 第2層変数 から生成された個別の分析文
+// TYPE_DESCRIPTIONS(静的テンプレ)と同じ shape だが、内容は個別化される
+// ============================================================
+export interface PersonalInsight {
+  generatedAt: string; // ISO timestamp
+  modelVersion?: string;
+  headline: string;
+  summary: string;
+  strengths: string[];
+  cautions: string[];
+  bestFitRoles: string[];
+  managementHint: string;
+  growthDirection: string;
+}
+
+// ============================================================
 // 統合診断結果(全部入り)
 // ============================================================
 export interface DiagnosticResult {
@@ -299,6 +315,8 @@ export interface Diagnosis {
   type: QuadType;
   // 拡張診断データ(新フォーム経由ならフル、seedはオプション)
   result?: DiagnosticResult;
+  /** AI 個別分析(診断結果×経歴×第2層変数 を Claude に渡して生成。一度生成したらキャッシュ) */
+  personalInsight?: PersonalInsight;
 }
 
 // ============================================================

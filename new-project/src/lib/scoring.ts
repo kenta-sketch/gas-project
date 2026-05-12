@@ -27,6 +27,11 @@ import type {
   OrgRiskCategory,
   DiagnosticQuestion,
   LikertValue,
+  ResponseStyle,
+  ResponseStyleProfile,
+  NeutralFrequencyV1,
+  AxisCorrelationCorrection,
+  ResponseTimings,
 } from "./types";
 
 // ============================================================
@@ -266,9 +271,183 @@ export function judgeType(
 // ============================================================
 // 統合: 全診断結果を一気に計算
 // ============================================================
+// ============================================================
+// 【第2層変数】Response Style Profile
+// 122人実証分析(2026-05-12)から導入。Likert加点方式のバイアスを補正する
+//
+// 全回答の分布から穏当/識別/極端/中立/同意/否定型に分類する。
+// 同じ得点でも回答スタイルで内的意味が違うため、タイプ判定の補助材料として使う。
+// ============================================================
+export function computeResponseStyle(answers: DiagnosticAnswers): ResponseStyleProfile {
+  // 全カテゴリから全Likert値を集める
+  const values: number[] = [];
+  for (const cat of [answers.axis, answers.aSeparation, answers.integration, answers.responsibility, answers.orgRisk]) {
+    for (const v of Object.values(cat)) {
+      if (typeof v === "number") values.push(v);
+    }
+  }
+  const total = values.length;
+  const distribution: Record<1 | 2 | 3 | 4 | 5, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+  for (const v of values) {
+    if (v >= 1 && v <= 5) {
+      distribution[v as 1 | 2 | 3 | 4 | 5] += 1;
+    }
+  }
+
+  const mean = total > 0 ? values.reduce((s, v) => s + v, 0) / total : 0;
+  const variance = total > 0 ? values.reduce((s, v) => s + (v - mean) ** 2, 0) / total : 0;
+  const sd = Math.sqrt(variance);
+
+  const extremeRatio = total > 0 ? (distribution[1] + distribution[5]) / total : 0;
+  const neutralRatio = total > 0 ? distribution[3] / total : 0;
+  const midRatio = total > 0 ? (distribution[2] + distribution[4]) / total : 0;
+  const acquiescenceBias = mean - 3.0; // 中央3を基準
+
+  let style: ResponseStyle = "Discriminant";
+  if (extremeRatio >= 0.5) style = "Extreme";
+  else if (neutralRatio >= 0.4) style = "Neutral";
+  else if (midRatio >= 0.6) style = "Modest";
+  else if (mean >= 4.0) style = "Acquiescence";
+  else if (mean <= 2.0) style = "Disacquiescence";
+
+  const warnings: string[] = [];
+  if (style === "Neutral") warnings.push("中立(3)の選択が多く、軸スコアの差が出にくい可能性");
+  if (style === "Extreme") warnings.push("極端な値(1か5)が多く、強く出すぎている可能性");
+  if (style === "Acquiescence") warnings.push("同意傾向が強く、社会的望ましさバイアスの影響を考慮");
+  if (style === "Modest" && acquiescenceBias > 0.5) warnings.push("穏当だがやや同意寄り");
+
+  return {
+    style,
+    distribution,
+    mean: Math.round(mean * 100) / 100,
+    sd: Math.round(sd * 100) / 100,
+    extremeRatio: Math.round(extremeRatio * 1000) / 1000,
+    neutralRatio: Math.round(neutralRatio * 1000) / 1000,
+    midRatio: Math.round(midRatio * 1000) / 1000,
+    acquiescenceBias: Math.round(acquiescenceBias * 100) / 100,
+    warnings,
+  };
+}
+
+// ============================================================
+// 【第2層変数】Neutral Frequency
+// 中立(3)を選ぶ頻度。v3.0仕様書の概念をLikertに適用
+// 30%超で解離・無感覚フラグの判定材料
+// ============================================================
+export function computeNeutralFrequency(answers: DiagnosticAnswers): NeutralFrequencyV1 {
+  let count = 0;
+  let total = 0;
+  for (const cat of [answers.axis, answers.aSeparation, answers.integration, answers.responsibility, answers.orgRisk]) {
+    for (const v of Object.values(cat)) {
+      total += 1;
+      if (v === 3) count += 1;
+    }
+  }
+  const ratio = total > 0 ? count / total : 0;
+  return {
+    count,
+    total,
+    ratio: Math.round(ratio * 1000) / 1000,
+    highFlag: ratio > 0.30,
+  };
+}
+
+// ============================================================
+// 【第2層変数】軸間相関補正
+// 122人実証データから判明した軸間相関を使い、純粋成分を推定する
+//
+// 観測された主な相関:
+//   C-D: +0.37 (強い正相関、賢さ次元として一緒に動く)
+//   A-D: -0.20 (感情と理性の対立)
+//   B-C: -0.18 (承認依存と直感は逆方向)
+//   A-B: +0.18 (感情系同士で弱く連動)
+//
+// 純粋成分の推定式 (簡易版):
+//   pureC = C - r_CD * D_normalized
+//   pureD = D - r_CD * C_normalized
+//   adjustedA = A * (1 + |r_AD|/2) (A-D 負相関を考慮し、Dと相反する方向のAを強調)
+//   adjustedB = B * (1 + |r_BC|/2)
+// ============================================================
+export function computeAxisCorrelationCorrection(scores: AxisScores): AxisCorrelationCorrection {
+  const CORR_CD = 0.37;
+  const CORR_AD = -0.20;
+  const CORR_BC = -0.18;
+
+  // 25点満点でセンタリング(平均値17を基準にする、122人データから)
+  const MEAN = 17.0;
+  const centered = {
+    A: scores.A - MEAN,
+    B: scores.B - MEAN,
+    C: scores.C - MEAN,
+    D: scores.D - MEAN,
+  };
+
+  // C-D の共通成分を引いて、純粋成分を推定
+  const pureC = MEAN + centered.C - CORR_CD * centered.D;
+  const pureD = MEAN + centered.D - CORR_CD * centered.C;
+  // A-D が負相関なので、Dが低いときAを少し強める(逆も)
+  const adjustedA = MEAN + centered.A * (1 + Math.abs(CORR_AD) / 2);
+  // B-C が負相関なので、Cが低いときBを少し強める
+  const adjustedB = MEAN + centered.B * (1 + Math.abs(CORR_BC) / 2);
+
+  const round1 = (v: number) => Math.round(v * 10) / 10;
+
+  return {
+    pureC: round1(pureC),
+    pureD: round1(pureD),
+    adjustedA: round1(adjustedA),
+    adjustedB: round1(adjustedB),
+    notes: [
+      `C-D相関 +0.37: pureC=${round1(pureC)} (生C=${round1(scores.C)})、pureD=${round1(pureD)} (生D=${round1(scores.D)})`,
+      `A-D相関 -0.20: adjustedA=${round1(adjustedA)} (生A=${round1(scores.A)})`,
+      `B-C相関 -0.18: adjustedB=${round1(adjustedB)} (生B=${round1(scores.B)})`,
+    ],
+  };
+}
+
+// ============================================================
+// 【第2層変数】回答時間プロファイル
+// クライアントから渡される質問IDごとの回答時間(ms)を集計
+// ============================================================
+export function computeResponseTimings(perQuestion: Record<string, number>): ResponseTimings | undefined {
+  const entries = Object.entries(perQuestion).filter(([, ms]) => typeof ms === "number" && ms > 0);
+  if (entries.length === 0) return undefined;
+
+  const values = entries.map(([, ms]) => ms);
+  const totalMs = values.reduce((s, v) => s + v, 0);
+  const meanMs = totalMs / values.length;
+
+  // 中央値
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const medianMs = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+
+  // 中央値の2倍以上時間がかかった質問
+  const threshold = medianMs * 2;
+  const longConsideredQuestions = entries
+    .filter(([, ms]) => ms >= threshold)
+    .map(([qid]) => qid);
+
+  // 速度プロファイル(中央値ベース)
+  // 即断: 中央値 < 3秒、慎重: 中央値 > 12秒、通常: それ以外
+  let speedProfile: "即断型" | "通常" | "慎重型" = "通常";
+  if (medianMs < 3000) speedProfile = "即断型";
+  else if (medianMs > 12000) speedProfile = "慎重型";
+
+  return {
+    perQuestion,
+    totalMs: Math.round(totalMs),
+    meanMs: Math.round(meanMs),
+    medianMs: Math.round(medianMs),
+    longConsideredQuestions,
+    speedProfile,
+  };
+}
+
 export function computeFullDiagnosis(
   answers: DiagnosticAnswers,
   emotions: EmotionScores,
+  timingPerQuestion?: Record<string, number>,
 ): DiagnosticResult {
   const scores = computeAxisScores(answers);
   const aSeparation = computeASeparation(answers);
@@ -276,6 +455,13 @@ export function computeFullDiagnosis(
   const responsibility = computeResponsibility(answers);
   const orgRisk = computeOrgRisk(answers);
   const primaryType = judgeType(scores, aSeparation, integration, orgRisk);
+
+  // 第2層変数(2026-05-12 追加)
+  const responseStyle = computeResponseStyle(answers);
+  const neutralFrequency = computeNeutralFrequency(answers);
+  const correlationCorrection = computeAxisCorrelationCorrection(scores);
+  const timings = timingPerQuestion ? computeResponseTimings(timingPerQuestion) : undefined;
+
   return {
     scores,
     emotions,
@@ -284,6 +470,10 @@ export function computeFullDiagnosis(
     responsibility,
     orgRisk,
     primaryType,
+    responseStyle,
+    neutralFrequency,
+    correlationCorrection,
+    timings,
   };
 }
 

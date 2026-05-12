@@ -170,7 +170,8 @@
 - [`notes/2026-05-03-japan-vs-brazil-civilization.md`](./notes/2026-05-03-japan-vs-brazil-civilization.md) ── 日本×ブラジル文明比較
 
 ### ★ 診断仕様(プロダクト実装の決定版)
-- [`notes/2026-05-12-likert-120-empirical-analysis.md`](./notes/2026-05-12-likert-120-empirical-analysis.md) ── ★★ **122人実証分析 + v3.0差し戻し決定(2026-05-12)・現在の方針**
+- [`notes/2026-05-12-session-log-decisions.md`](./notes/2026-05-12-session-log-decisions.md) ── ★★★ **2026-05-12 セッションログ(v3受領→差し戻し→第2層変数実装の全経緯)**
+- [`notes/2026-05-12-likert-120-empirical-analysis.md`](./notes/2026-05-12-likert-120-empirical-analysis.md) ── ★★ **122人実証分析 + v3.0差し戻し決定**
 - [`scoring-db/2026-05-12-likert-120-respondents.xlsx`](./scoring-db/2026-05-12-likert-120-respondents.xlsx) ── 122人の生回答データ
 - [`notes/2026-05-11-diagnostic-spec-v1.md`](./notes/2026-05-11-diagnostic-spec-v1.md) ── **★ クアッドマインド診断 完全仕様書 v1.0 (G1〜G6完全実装版・現在の本流)**
 - [`pdfs/2026-05-XX-diagnostic-spec-v1.pdf`](./pdfs/2026-05-XX-diagnostic-spec-v1.pdf) ── v1.0 原本PDF
@@ -223,10 +224,15 @@ related:
 - [x] **採点エンジン v3.0 + 強制選択式 完全統合仕様書 受領**(2026-05-12、`notes/2026-05-12-scoring-engine-v3.md`)
 - [x] **v3.0 強制選択式への実装移行**(完了したが設計者2名で機能せず、同日差し戻し)
 - [x] **★ 122人実証データ分析と v3.0 差し戻し決定**(2026-05-12、`notes/2026-05-12-likert-120-empirical-analysis.md`)
-- [ ] **★ Response Style Profile を第2層変数として実装**(Modest/Discriminant/Extreme 分類、加点バイアス補正)
-- [ ] **回答時間ロギング**(質問IDごとに Date.now() 差分、慎重型/即断型/長考点の判別)
-- [ ] **C軸質問の見直し**(SD=1.18 と弁別力低、特に「危険を直感で回避」SD=1.02)
-- [ ] **健全度指標表示**(C高=健全、B高=不健全の実証相関を画面に反映)
+- [x] **★ Response Style Profile を第2層変数として実装**(2026-05-12)
+- [x] **Neutral Frequency を独立変数として実装**(2026-05-12)
+- [x] **軸間相関補正を実装**(2026-05-12、C-D=0.37 / A-D=-0.20 / B-C=-0.18)
+- [x] **回答時間ロギング**(2026-05-12、apply page でクライアント計測、ApplyDraft 永続化)
+- [x] **2026-05-12 セッションログを保存**(`notes/2026-05-12-session-log-decisions.md`)
+- [ ] **C軸質問の見直し**(SD=1.18 と弁別力低、特に「危険を直感で回避」SD=1.02 ── 飯淵さんと協議)
+- [ ] **健全度指標表示**(C高=健全、B高=不健全の実証相関を本人向け画面にも反映)
+- [ ] **第2層変数を活用した PersonalInsight 復活**(タイプ判定+第2層変数を入力としてAI個別化)
+- [ ] **管理ダッシュボードで第2層変数を採用判定に活用**
 - [ ] **時系列再診断 + 週次行動ログ機能**(改善②③)
 - [ ] **12タイプ完全マッピング**を typeDescriptions に拡張
 - [ ] **内部出力(管理職向け) vs 外部出力(本人向け)の分離表示**

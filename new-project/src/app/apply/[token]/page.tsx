@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import { QUESTION_SECTIONS, EMOTION_QUESTIONS, FZ_QUESTIONS } from "@/lib/questions";
 import { computeFullDiagnosis } from "@/lib/scoring";
 import {
@@ -53,6 +53,8 @@ interface ApplyDraft {
   resumeFileName: string | null;
   answers: DiagnosticAnswers;
   emotions: EmotionScores;
+  /** 第2層変数: 質問IDごとの回答時間(ms)。一度記録したら上書きしない */
+  responseTimings: Record<string, number>;
   updatedAt: string;
 }
 
@@ -160,6 +162,16 @@ export default function ApplyPage({
     },
   );
 
+  // ---- 第2層変数: 回答時間ロギング ----
+  // 各質問への回答時間(ms)。一度記録したら上書きしない(最初の判断の速さを保存)
+  const [responseTimings, setResponseTimings] = useState<Record<string, number>>(
+    initialDraft?.responseTimings ?? {},
+  );
+  // 直前のクリック時刻(差分計算の基準点)
+  const lastClickTimeRef = useRef<number | null>(null);
+  // セクション切り替え時にリセットされるエントリー時刻
+  const sectionEntryTimeRef = useRef<number>(Date.now());
+
   // ---- 自動保存 ----
   const [savedAt, setSavedAt] = useState<Date | null>(
     initialDraft ? new Date(initialDraft.updatedAt) : null,
@@ -188,6 +200,7 @@ export default function ApplyPage({
       resumeFileName: resumeFile?.name ?? resumeFileNameRestored,
       answers,
       emotions,
+      responseTimings,
       updatedAt: new Date().toISOString(),
     };
     saveDraft(token, draft);
@@ -197,7 +210,7 @@ export default function ApplyPage({
     applicantId, fullName, ageRange, gender, email, phone, appliedPosition,
     education, workHistory, selfPR,
     resumeData, resumeFile, resumeFileNameRestored,
-    answers, emotions,
+    answers, emotions, responseTimings,
     token,
   ]);
 
@@ -293,6 +306,18 @@ export default function ApplyPage({
   }
 
   function setAnswer(field: keyof DiagnosticAnswers, qId: string, value: LikertValue) {
+    // 回答時間ロギング: 最初に答えた時のみ記録(後の修正は無視)
+    const now = Date.now();
+    setResponseTimings((prev) => {
+      if (prev[qId] !== undefined) return prev; // 既に記録済み
+      const baseline = lastClickTimeRef.current ?? sectionEntryTimeRef.current;
+      const elapsed = now - baseline;
+      // 異常値は除外(60秒以上は離脱・休憩とみなして上限60秒に丸める)
+      const sanitized = Math.min(Math.max(elapsed, 0), 60_000);
+      return { ...prev, [qId]: sanitized };
+    });
+    lastClickTimeRef.current = now;
+
     setAnswers((prev) => ({
       ...prev,
       [field]: { ...prev[field], [qId]: value },
@@ -300,6 +325,9 @@ export default function ApplyPage({
   }
 
   function nextSection() {
+    // セクション切り替え時は計時の基準点もリセット
+    sectionEntryTimeRef.current = Date.now();
+    lastClickTimeRef.current = null;
     if (diagSectionIdx < QUESTION_SECTIONS.length - 1) {
       setDiagSectionIdx(diagSectionIdx + 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -309,6 +337,8 @@ export default function ApplyPage({
     }
   }
   function prevSection() {
+    sectionEntryTimeRef.current = Date.now();
+    lastClickTimeRef.current = null;
     if (diagSectionIdx > 0) {
       setDiagSectionIdx(diagSectionIdx - 1);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -318,7 +348,7 @@ export default function ApplyPage({
   }
 
   function submit() {
-    const result = computeFullDiagnosis(answers, emotions);
+    const result = computeFullDiagnosis(answers, emotions, responseTimings);
     const today = new Date().toISOString().slice(0, 10);
     const presetTendency =
       result.primaryType === "突破型"

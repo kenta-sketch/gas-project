@@ -120,6 +120,87 @@ export interface OrgRiskDiagnosis {
 }
 
 // ============================================================
+// 第2層変数:Response Style Profile
+// 122人実証分析 (2026-05-12) から導入。Likert加点方式のバイアスを補正する
+// ============================================================
+export type ResponseStyle =
+  | "Modest"        // 穏当型: 2-4に集中(60%以上)
+  | "Discriminant"  // 識別型: 1-5を幅広く使う(極端度0.15-0.45)
+  | "Extreme"       // 極端型: 1か5ばかり(50%以上)
+  | "Neutral"       // 中立型: 3ばかり(40%以上)
+  | "Acquiescence"  // 同意型: 全体平均4.0以上
+  | "Disacquiescence"; // 否定型: 全体平均2.0以下
+
+export interface ResponseStyleProfile {
+  style: ResponseStyle;
+  /** 1-5それぞれを選んだ回数 */
+  distribution: Record<1 | 2 | 3 | 4 | 5, number>;
+  /** 全回答の平均値 */
+  mean: number;
+  /** 全回答の標準偏差 */
+  sd: number;
+  /** 1または5を選んだ率 */
+  extremeRatio: number;
+  /** 3(中立)を選んだ率 */
+  neutralRatio: number;
+  /** 2か4を選んだ率 */
+  midRatio: number;
+  /** 加点バイアスの方向と強さ。0=中央、正=同意、負=否定 */
+  acquiescenceBias: number;
+  /** 注意フラグ(例: "中立すぎて識別不能", "極端で読み取り注意") */
+  warnings: string[];
+}
+
+// ============================================================
+// 第2層変数:Neutral Frequency
+// 中立(3)を選ぶ頻度。v3.0仕様書の概念をLikertに適用
+// 30%超で解離・無感覚フラグの判定材料
+// ============================================================
+export interface NeutralFrequencyV1 {
+  count: number; // 3を選んだ回数
+  total: number; // 全質問数
+  ratio: number; // count / total
+  highFlag: boolean; // ratio > 0.30
+}
+
+// ============================================================
+// 第2層変数:軸間相関補正
+// 122人データから C-D が 0.37、A-D が -0.20 と判明。
+// 軸を完全に独立とみなさず、純粋成分を推定する
+// ============================================================
+export interface AxisCorrelationCorrection {
+  /** C軸から「D軸と共通する成分」を引いた純粋C */
+  pureC: number;
+  /** D軸から「C軸と共通する成分」を引いた純粋D */
+  pureD: number;
+  /** A軸を補正(A-D負相関 -0.20 を考慮) */
+  adjustedA: number;
+  /** B軸を補正(B-C負相関 -0.18 を考慮) */
+  adjustedB: number;
+  /** どの軸ペアが連動していたかの説明 */
+  notes: string[];
+}
+
+// ============================================================
+// 第2層変数:回答時間プロファイル
+// 各質問にかかった時間 (ms) を記録し、慎重型/即断型/長考点を可視化
+// ============================================================
+export interface ResponseTimings {
+  /** 質問IDごとの回答時間(ms) */
+  perQuestion: Record<string, number>;
+  /** 全質問の合計時間(ms) */
+  totalMs: number;
+  /** 1問あたり平均(ms) */
+  meanMs: number;
+  /** 中央値(ms) */
+  medianMs: number;
+  /** 中央値の2倍以上時間がかかった質問ID(長考点) */
+  longConsideredQuestions: string[];
+  /** 慎重型/即断型/通常 */
+  speedProfile: "即断型" | "通常" | "慎重型";
+}
+
+// ============================================================
 // 統合診断結果(全部入り)
 // ============================================================
 export interface DiagnosticResult {
@@ -130,6 +211,15 @@ export interface DiagnosticResult {
   responsibility: ResponsibilityDiagnosis;
   orgRisk: OrgRiskDiagnosis; // 内部出力のみで使う
   primaryType: QuadType;
+  // ─ 第2層変数(2026-05-12 追加) ─
+  /** Likert加点方式のバイアスを補正するための回答スタイル分析 */
+  responseStyle?: ResponseStyleProfile;
+  /** 中立(3)選択頻度。解離・無感覚フラグの判定材料 */
+  neutralFrequency?: NeutralFrequencyV1;
+  /** 軸間相関を考慮した純粋成分(122人実証から導出) */
+  correlationCorrection?: AxisCorrelationCorrection;
+  /** 各質問への回答時間プロファイル(任意) */
+  timings?: ResponseTimings;
 }
 
 // ============================================================

@@ -41,8 +41,26 @@ const RISK_TONE: Record<string, string> = {
   high: "bg-rose-50 border-rose-300 text-rose-800",
 };
 
+const RESPONSE_STYLE_LABEL: Record<string, string> = {
+  Modest: "穏当型(2-4中心)",
+  Discriminant: "識別型(1-5幅広く)",
+  Extreme: "極端型(1か5中心)",
+  Neutral: "中立型(3中心)",
+  Acquiescence: "同意型(全体高め)",
+  Disacquiescence: "否定型(全体低め)",
+};
+
+const RESPONSE_STYLE_TONE: Record<string, string> = {
+  Modest: "bg-blue-50 border-blue-200 text-blue-700",
+  Discriminant: "bg-emerald-50 border-emerald-200 text-emerald-700",
+  Extreme: "bg-rose-50 border-rose-200 text-rose-700",
+  Neutral: "bg-slate-50 border-slate-300 text-slate-700",
+  Acquiescence: "bg-amber-50 border-amber-200 text-amber-700",
+  Disacquiescence: "bg-purple-50 border-purple-200 text-purple-700",
+};
+
 export function DiagnosticInsight({ result, internal = false }: Props) {
-  const { aSeparation, integration, responsibility, orgRisk } = result;
+  const { aSeparation, integration, responsibility, orgRisk, responseStyle, neutralFrequency, correlationCorrection, timings } = result;
 
   return (
     <div className="space-y-4">
@@ -201,6 +219,154 @@ export function DiagnosticInsight({ result, internal = false }: Props) {
       {!internal && orgRisk.hasAnyRisk && (
         <section className="bg-amber-50 border border-amber-200 rounded p-3 text-xs text-slate-700">
           一部の傾向については、管理者面談で個別に確認することを推奨します(詳細は管理者ビューに表示)。
+        </section>
+      )}
+
+      {/* ===== 第2層変数(2026-05-12 追加) ===== */}
+      {(responseStyle || neutralFrequency || correlationCorrection || timings) && internal && (
+        <section className="bg-slate-50/60 border border-slate-200 rounded-xl p-4 mt-2">
+          <div className="flex items-baseline justify-between mb-3">
+            <div className="text-[10px] tracking-[0.25em] uppercase text-slate-600 font-bold">
+              第2層変数:回答メタ分析
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 font-bold">
+              122人実証ベース
+            </span>
+          </div>
+
+          {/* Response Style Profile */}
+          {responseStyle && (
+            <div className="bg-white border border-slate-200 rounded p-3 mb-2">
+              <div className="flex items-baseline justify-between mb-2">
+                <span className="text-xs font-bold text-slate-700">Response Style Profile</span>
+                <span className={"text-xs px-2 py-0.5 rounded-full border font-bold " + (RESPONSE_STYLE_TONE[responseStyle.style] ?? "bg-slate-50 border-slate-200")}>
+                  {RESPONSE_STYLE_LABEL[responseStyle.style] ?? responseStyle.style}
+                </span>
+              </div>
+              <div className="grid grid-cols-5 gap-1 mb-2">
+                {([1, 2, 3, 4, 5] as const).map((v) => {
+                  const total = Object.values(responseStyle.distribution).reduce((s, x) => s + x, 0);
+                  const pct = total > 0 ? (responseStyle.distribution[v] / total) * 100 : 0;
+                  return (
+                    <div key={v} className="text-center">
+                      <div className="text-[10px] text-slate-500 mb-0.5">{v}</div>
+                      <div className="h-6 bg-slate-100 rounded relative overflow-hidden">
+                        <div
+                          className="absolute bottom-0 left-0 right-0 bg-brand-gradient"
+                          style={{ height: `${pct}%` }}
+                        />
+                      </div>
+                      <div className="text-[10px] text-slate-600 mt-0.5 font-mono">{pct.toFixed(0)}%</div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="text-[11px] text-slate-600 space-y-0.5">
+                <div>平均 {responseStyle.mean.toFixed(2)} / SD {responseStyle.sd.toFixed(2)} / 同意バイアス {responseStyle.acquiescenceBias > 0 ? "+" : ""}{responseStyle.acquiescenceBias.toFixed(2)}</div>
+                <div>極端度 {(responseStyle.extremeRatio * 100).toFixed(0)}% / 中立度 {(responseStyle.neutralRatio * 100).toFixed(0)}% / 中庸度 {(responseStyle.midRatio * 100).toFixed(0)}%</div>
+              </div>
+              {responseStyle.warnings.length > 0 && (
+                <div className="mt-2 bg-amber-50 border border-amber-200 rounded p-2 text-[11px] text-amber-800 space-y-0.5">
+                  {responseStyle.warnings.map((w, i) => (
+                    <div key={i}>⚠ {w}</div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Neutral Frequency */}
+          {neutralFrequency && (
+            <div className="bg-white border border-slate-200 rounded p-3 mb-2">
+              <div className="flex items-baseline justify-between mb-1">
+                <span className="text-xs font-bold text-slate-700">Neutral Frequency(中立3の選択率)</span>
+                {neutralFrequency.highFlag && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 font-bold">
+                    高め({">"}30%)
+                  </span>
+                )}
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xl font-bold text-slate-900">{(neutralFrequency.ratio * 100).toFixed(1)}%</span>
+                <span className="text-xs text-slate-500">({neutralFrequency.count} / {neutralFrequency.total})</span>
+              </div>
+              <div className="h-1.5 bg-slate-100 rounded mt-1.5 relative">
+                <div
+                  className={"h-1.5 rounded " + (neutralFrequency.highFlag ? "bg-amber-400" : "bg-slate-400")}
+                  style={{ width: `${Math.min(neutralFrequency.ratio * 100, 100)}%` }}
+                />
+                {/* 30% 線 */}
+                <div className="absolute top-0 bottom-0 w-px bg-amber-500" style={{ left: "30%" }} />
+              </div>
+              {neutralFrequency.highFlag && (
+                <div className="text-[11px] text-amber-800 mt-2">
+                  ⚠ 中立選択が30%超。質問が刺さっていない、解離傾向、または無感覚の可能性。再診断または聞き取りを推奨。
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 軸間相関補正 */}
+          {correlationCorrection && (
+            <div className="bg-white border border-slate-200 rounded p-3 mb-2">
+              <div className="text-xs font-bold text-slate-700 mb-2">軸間相関補正(122人実証から)</div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <div className="bg-emerald-50 border border-emerald-200 rounded p-2">
+                  <div className="text-emerald-700 font-bold mb-0.5">純粋 C 成分</div>
+                  <div className="text-emerald-900 font-mono">{correlationCorrection.pureC.toFixed(1)}</div>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                  <div className="text-blue-700 font-bold mb-0.5">純粋 D 成分</div>
+                  <div className="text-blue-900 font-mono">{correlationCorrection.pureD.toFixed(1)}</div>
+                </div>
+                <div className="bg-rose-50 border border-rose-200 rounded p-2">
+                  <div className="text-rose-700 font-bold mb-0.5">補正 A</div>
+                  <div className="text-rose-900 font-mono">{correlationCorrection.adjustedA.toFixed(1)}</div>
+                </div>
+                <div className="bg-purple-50 border border-purple-200 rounded p-2">
+                  <div className="text-purple-700 font-bold mb-0.5">補正 B</div>
+                  <div className="text-purple-900 font-mono">{correlationCorrection.adjustedB.toFixed(1)}</div>
+                </div>
+              </div>
+              <div className="mt-2 space-y-0.5 text-[10px] text-slate-500 leading-relaxed">
+                {correlationCorrection.notes.map((n, i) => (
+                  <div key={i}>· {n}</div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 回答時間プロファイル */}
+          {timings && (
+            <div className="bg-white border border-slate-200 rounded p-3">
+              <div className="flex items-baseline justify-between mb-2">
+                <span className="text-xs font-bold text-slate-700">回答時間プロファイル</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full border font-bold bg-slate-50 border-slate-200 text-slate-700">
+                  {timings.speedProfile}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-[11px]">
+                <div>
+                  <div className="text-slate-500">合計</div>
+                  <div className="font-mono text-slate-900 font-bold">{(timings.totalMs / 1000).toFixed(1)}秒</div>
+                </div>
+                <div>
+                  <div className="text-slate-500">平均/問</div>
+                  <div className="font-mono text-slate-900 font-bold">{(timings.meanMs / 1000).toFixed(1)}秒</div>
+                </div>
+                <div>
+                  <div className="text-slate-500">中央値</div>
+                  <div className="font-mono text-slate-900 font-bold">{(timings.medianMs / 1000).toFixed(1)}秒</div>
+                </div>
+              </div>
+              {timings.longConsideredQuestions.length > 0 && (
+                <div className="mt-2 text-[11px] text-slate-700">
+                  <span className="text-slate-500">長考(中央値の2倍以上):</span>{" "}
+                  <span className="font-mono">{timings.longConsideredQuestions.join(", ")}</span>
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
     </div>

@@ -21,185 +21,55 @@ import type {
 
 type Step = "profile" | "career" | "diagnostic" | "emotions" | "done";
 
-// ============================================================
-// 自動保存(localStorage によるドラフト)
-// 通信切断やページ離脱があっても、同じ応募URLに戻れば続きから再開できる
-// ============================================================
-const DRAFT_SCHEMA_VERSION = 1;
-
-interface ApplyDraft {
-  v: typeof DRAFT_SCHEMA_VERSION;
-  applicantId: string;
-  step: Step;
-  diagSectionIdx: number;
-  fullName: string;
-  ageRange: string;
-  gender: "男性" | "女性" | "その他";
-  email: string;
-  phone: string;
-  appliedPosition: string;
-  education: string;
-  workHistory: string;
-  selfPR: string;
-  resumeData: ResumeData | null;
-  resumeFileName: string | null;
-  answers: DiagnosticAnswers;
-  emotions: EmotionScores;
-  updatedAt: string;
-}
-
-function draftKey(token: string) {
-  return `qm-apply-draft-${token}`;
-}
-
-function loadDraft(token: string): ApplyDraft | null {
-  if (typeof window === "undefined") return null;
-  const raw = window.localStorage.getItem(draftKey(token));
-  if (!raw) return null;
-  try {
-    const d = JSON.parse(raw) as ApplyDraft;
-    if (d.v !== DRAFT_SCHEMA_VERSION) return null;
-    return d;
-  } catch {
-    return null;
-  }
-}
-
-function saveDraft(token: string, d: ApplyDraft) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(draftKey(token), JSON.stringify(d));
-  } catch {
-    // localStorage quota exceeded など、保存失敗時は黙って続行
-  }
-}
-
-function clearDraft(token: string) {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(draftKey(token));
-}
-
-function formatSavedAt(d: Date): string {
-  const now = Date.now();
-  const diffSec = Math.floor((now - d.getTime()) / 1000);
-  if (diffSec < 5) return "たった今";
-  if (diffSec < 60) return `${diffSec}秒前`;
-  if (diffSec < 3600) return `${Math.floor(diffSec / 60)}分前`;
-  return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
-}
-
 export default function ApplyPage({
   params,
 }: {
   params: Promise<{ token: string }>;
 }) {
   const { token } = use(params);
-
-  // 既存ドラフトがあれば全フィールドを復元
-  const [initialDraft] = useState(() => loadDraft(token));
-  const [draftRestored] = useState(() => initialDraft !== null);
-
   const [settings, setSettings] = useState<Settings | null>(null);
-  const [step, setStep] = useState<Step>(initialDraft?.step ?? "profile");
-  const [diagSectionIdx, setDiagSectionIdx] = useState(initialDraft?.diagSectionIdx ?? 0);
-  const [applicantId] = useState(() => initialDraft?.applicantId ?? newApplicantId());
+  const [step, setStep] = useState<Step>("profile");
+  const [diagSectionIdx, setDiagSectionIdx] = useState(0);
+  const [applicantId] = useState(() => newApplicantId());
 
   useEffect(() => {
     setSettings(loadSettings());
   }, []);
 
   // ---- プロフィール ----
-  const [fullName, setFullName] = useState(initialDraft?.fullName ?? "");
-  const [ageRange, setAgeRange] = useState(initialDraft?.ageRange ?? "20代後半");
-  const [gender, setGender] = useState<"男性" | "女性" | "その他">(
-    initialDraft?.gender ?? "男性",
-  );
-  const [email, setEmail] = useState(initialDraft?.email ?? "");
-  const [phone, setPhone] = useState(initialDraft?.phone ?? "");
-  const [appliedPosition, setAppliedPosition] = useState(initialDraft?.appliedPosition ?? "");
+  const [fullName, setFullName] = useState("");
+  const [ageRange, setAgeRange] = useState("20代後半");
+  const [gender, setGender] = useState<"男性" | "女性" | "その他">("男性");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [appliedPosition, setAppliedPosition] = useState("");
 
   // ---- 経歴 ----
-  const [education, setEducation] = useState(initialDraft?.education ?? "");
-  const [workHistory, setWorkHistory] = useState(initialDraft?.workHistory ?? "");
-  const [selfPR, setSelfPR] = useState(initialDraft?.selfPR ?? "");
+  const [education, setEducation] = useState("");
+  const [workHistory, setWorkHistory] = useState("");
+  const [selfPR, setSelfPR] = useState("");
 
   // ---- 履歴書アップロード ----
   const [resumeFile, setResumeFile] = useState<File | null>(null);
-  const [resumeData, setResumeData] = useState<ResumeData | null>(
-    initialDraft?.resumeData ?? null,
-  );
-  const [resumeFileNameRestored] = useState(initialDraft?.resumeFileName ?? null);
+  const [resumeData, setResumeData] = useState<ResumeData | null>(null);
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
 
   // ---- 診断回答(72問・強制選択式) ----
-  const [answers, setAnswers] = useState<DiagnosticAnswers>(
-    initialDraft?.answers ?? {
-      axis: {},
-      aSeparation: {},
-      integration: {},
-      responsibility: {},
-      orgRisk: {},
-    },
-  );
-  const [emotions, setEmotions] = useState<EmotionScores>(
-    initialDraft?.emotions ?? {
-      fear: 3,
-      sadness: 3,
-      anger: 3,
-      joy: 3,
-      happiness: 3,
-    },
-  );
-
-  // ---- 自動保存 ----
-  const [savedAt, setSavedAt] = useState<Date | null>(
-    initialDraft ? new Date(initialDraft.updatedAt) : null,
-  );
-  const [savedAtTick, setSavedAtTick] = useState(0); // 「N秒前」表示を更新するためのトリガー
-
-  // フォーム状態が変わるたびに localStorage に保存(完了画面では保存しない)
-  useEffect(() => {
-    if (!settings) return; // 初期化前は保存しない
-    if (step === "done") return; // 提出済みなら保存しない
-    const draft: ApplyDraft = {
-      v: DRAFT_SCHEMA_VERSION,
-      applicantId,
-      step,
-      diagSectionIdx,
-      fullName,
-      ageRange,
-      gender,
-      email,
-      phone,
-      appliedPosition,
-      education,
-      workHistory,
-      selfPR,
-      resumeData,
-      resumeFileName: resumeFile?.name ?? resumeFileNameRestored,
-      answers,
-      emotions,
-      updatedAt: new Date().toISOString(),
-    };
-    saveDraft(token, draft);
-    setSavedAt(new Date());
-  }, [
-    settings, step, diagSectionIdx,
-    applicantId, fullName, ageRange, gender, email, phone, appliedPosition,
-    education, workHistory, selfPR,
-    resumeData, resumeFile, resumeFileNameRestored,
-    answers, emotions,
-    token,
-  ]);
-
-  // 「N秒前」表示を10秒ごとに更新
-  useEffect(() => {
-    const id = setInterval(() => setSavedAtTick((t) => t + 1), 10_000);
-    return () => clearInterval(id);
-  }, []);
-  // eslint-disable-next-line @typescript-eslint/no-unused-expressions
-  savedAtTick;
+  const [answers, setAnswers] = useState<DiagnosticAnswers>({
+    axis: {},
+    aSeparation: {},
+    integration: {},
+    responsibility: {},
+    orgRisk: {},
+  });
+  const [emotions, setEmotions] = useState<EmotionScores>({
+    fear: 3,
+    sadness: 3,
+    anger: 3,
+    joy: 3,
+    happiness: 3,
+  });
 
   // FZ分岐: 内的A高 × 表出A低 のときだけ表示
   // iA系の target_credit 平均が高く、eA系の target_credit 平均が低い場合
@@ -364,15 +234,7 @@ export default function ApplyPage({
       presetTendency,
     };
     upsertApplicant(applicant);
-    clearDraft(token);
     setStep("done");
-  }
-
-  function resetDraft() {
-    if (!confirm("入力内容をすべて消去して最初からやり直しますか?この操作は取り消せません。")) return;
-    clearDraft(token);
-    // 強制リロードで全 state をリセット(useState 初期化が走り直す)
-    window.location.reload();
   }
 
   return (
@@ -383,29 +245,6 @@ export default function ApplyPage({
         <p className="text-sm text-slate-600 mt-1">
           所要時間 約15-20分。プロフィール → 経歴 → 診断(72問・強制選択式・5セクション) で完了します。
         </p>
-        <p className="text-xs text-emerald-700 mt-1 inline-flex items-center gap-1">
-          <span>💾</span>
-          <span>入力内容は自動でこのブラウザに保存されます。途中で離脱しても同じURLに戻れば続きから再開できます。</span>
-        </p>
-        {draftRestored && step !== "done" && (
-          <div className="mt-3 bg-amber-50 border border-amber-200 rounded p-3 text-sm flex items-center justify-between gap-3">
-            <div>
-              <div className="font-bold text-amber-900">📝 前回の入力を復元しました</div>
-              <div className="text-xs text-amber-800 mt-0.5">
-                {initialDraft && `最終保存: ${new Date(initialDraft.updatedAt).toLocaleString("ja-JP")}`}
-                {resumeFileNameRestored && !resumeFile && (
-                  <> · 履歴書ファイル「{resumeFileNameRestored}」は解析結果のみ保持(再アップロード不要)</>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={resetDraft}
-              className="text-xs px-3 py-1.5 rounded border border-amber-300 bg-white hover:bg-amber-100 text-amber-900 shrink-0"
-            >
-              最初からやり直す
-            </button>
-          </div>
-        )}
         <StepIndicator step={step} />
         {step === "diagnostic" && (
           <div className="mt-3">
@@ -419,11 +258,6 @@ export default function ApplyPage({
                 style={{ width: `${(answeredQuestions / totalQuestions) * 100}%` }}
               />
             </div>
-          </div>
-        )}
-        {savedAt && step !== "done" && (
-          <div className="mt-2 text-[11px] text-slate-400 text-right">
-            ✓ 自動保存済み({formatSavedAt(savedAt)})
           </div>
         )}
       </header>
@@ -500,19 +334,11 @@ export default function ApplyPage({
               )}
               {resumeData && (
                 <div className="bg-emerald-50 border border-emerald-200 rounded p-3 text-sm">
-                  <div className="font-bold mb-1">
-                    ✓ 解析完了: {resumeFile?.name ?? resumeFileNameRestored ?? "(前回アップロード分)"}
-                  </div>
+                  <div className="font-bold mb-1">✓ 解析完了: {resumeFile?.name}</div>
                   <div className="text-slate-700">
                     氏名: {resumeData.fullName ?? "—"} · 学歴: {resumeData.education?.length ?? 0}件 · 職歴:{" "}
                     {resumeData.workHistory?.length ?? 0}件
                   </div>
-                  {!resumeFile && resumeFileNameRestored && (
-                    <div className="text-xs text-emerald-700 mt-1">
-                      ※ ファイル本体は再アップロード不要(解析結果が保持されています)。
-                      変更したい場合は別のファイルを選び直してください。
-                    </div>
-                  )}
                 </div>
               )}
             </div>

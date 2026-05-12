@@ -260,28 +260,6 @@ export interface Diagnosis {
   emotions: EmotionScores;
   type: QuadType;
   result?: DiagnosticResult;
-  /**
-   * 診断結果 × 経歴 を LLM で個別化したタイプ説明文。
-   * 一度生成したらキャッシュ。再生成は明示操作。
-   */
-  personalInsight?: PersonalInsight;
-}
-
-/**
- * TYPE_DESCRIPTIONS と同じ shape の、その個人専用の説明文。
- * Claude が診断結果 + プロフィール + 経歴 を読んで生成。
- */
-export interface PersonalInsight {
-  type: QuadType;
-  generatedAt: string; // ISO timestamp
-  modelVersion?: string;
-  headline: string;
-  summary: string;
-  strengths: string[];
-  cautions: string[];
-  bestFitRoles: string[];
-  managementHint: string;
-  growthDirection: string;
 }
 
 // ============================================================

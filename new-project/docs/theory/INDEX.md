@@ -170,6 +170,7 @@
 - [`notes/2026-05-03-japan-vs-brazil-civilization.md`](./notes/2026-05-03-japan-vs-brazil-civilization.md) ── 日本×ブラジル文明比較
 
 ### ★ 診断仕様(プロダクト実装の決定版)
+- [`notes/2026-05-12-iibuchi-action-items.md`](./notes/2026-05-12-iibuchi-action-items.md) ── ★★★ **飯淵さんへの課題まとめ(背景+論点+具体作業の整理、共有用)**
 - [`notes/2026-05-12-session-log-decisions.md`](./notes/2026-05-12-session-log-decisions.md) ── ★★★ **2026-05-12 セッションログ(v3受領→差し戻し→第2層変数実装の全経緯)**
 - [`notes/2026-05-12-likert-120-empirical-analysis.md`](./notes/2026-05-12-likert-120-empirical-analysis.md) ── ★★ **122人実証分析 + v3.0差し戻し決定**
 - [`scoring-db/2026-05-12-likert-120-respondents.xlsx`](./scoring-db/2026-05-12-likert-120-respondents.xlsx) ── 122人の生回答データ

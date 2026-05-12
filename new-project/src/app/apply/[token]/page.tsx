@@ -3,6 +3,7 @@
 import { use, useEffect, useMemo, useState } from "react";
 import { QUESTION_SECTIONS, EMOTION_QUESTIONS, FZ_QUESTIONS } from "@/lib/questions";
 import { computeFullDiagnosis } from "@/lib/scoring";
+import { getScoringRecord } from "@/data/scoring-db-v3";
 import {
   loadSettings,
   newApplicantId,
@@ -14,20 +15,11 @@ import type {
   ResumeData,
   Settings,
   Applicant,
-  LikertValue,
+  OptionId,
   DiagnosticAnswers,
-  QuadType,
 } from "@/lib/types";
 
 type Step = "profile" | "career" | "diagnostic" | "emotions" | "done";
-
-const LIKERT_LABELS: Record<LikertValue, string> = {
-  1: "全くあてはまらない",
-  2: "あまりあてはまらない",
-  3: "どちらでもない",
-  4: "ややあてはまる",
-  5: "とてもあてはまる",
-};
 
 export default function ApplyPage({
   params,
@@ -63,7 +55,7 @@ export default function ApplyPage({
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
 
-  // ---- 診断回答(75問体系) ----
+  // ---- 診断回答(72問・強制選択式) ----
   const [answers, setAnswers] = useState<DiagnosticAnswers>({
     axis: {},
     aSeparation: {},
@@ -80,15 +72,25 @@ export default function ApplyPage({
   });
 
   // FZ分岐: 内的A高 × 表出A低 のときだけ表示
+  // iA系の target_credit 平均が高く、eA系の target_credit 平均が低い場合
   const showFZ = useMemo(() => {
-    const iAValues = ["iA-1","iA-2","iA-3","iA-4","iA-5"].map((id) => answers.aSeparation[id]).filter(Boolean) as LikertValue[];
-    const eAValues = ["eA-1","eA-2","eA-3","eA-4","eA-5"].map((id) => answers.aSeparation[id]).filter(Boolean) as LikertValue[];
-    if (iAValues.length < 5 || eAValues.length < 5) return false;
-    const iAAvg = iAValues.reduce((s, v) => s + v, 0) / iAValues.length;
-    const eA5Reversed = 6 - (answers.aSeparation["eA-5"] ?? 3);
-    const eAValuesAdj = eAValues.map((v, i) => i === 4 ? eA5Reversed : v);
-    const eAAvg = eAValuesAdj.reduce((s, v) => s + v, 0) / eAValuesAdj.length;
-    return iAAvg >= 3.5 && eAAvg < 3.0;
+    const calcAvg = (prefix: string) => {
+      const ids = ["iA-1","iA-2","iA-3","iA-4","iA-5","eA-1","eA-2","eA-3","eA-4","eA-5"]
+        .filter((id) => id.startsWith(prefix));
+      const values: number[] = [];
+      for (const id of ids) {
+        const opt = answers.aSeparation[id];
+        if (!opt) continue;
+        const rec = getScoringRecord(id, opt);
+        if (rec) values.push(rec.target_credit);
+      }
+      if (values.length < ids.length) return null;
+      return values.reduce((s, v) => s + v, 0) / values.length;
+    };
+    const iAAvg = calcAvg("iA");
+    const eAAvg = calcAvg("eA");
+    if (iAAvg === null || eAAvg === null) return false;
+    return iAAvg >= 0.6 && eAAvg < 0.4;
   }, [answers.aSeparation]);
 
   const currentSection = QUESTION_SECTIONS[diagSectionIdx];
@@ -162,7 +164,7 @@ export default function ApplyPage({
     }
   }
 
-  function setAnswer(field: keyof DiagnosticAnswers, qId: string, value: LikertValue) {
+  function setAnswer(field: keyof DiagnosticAnswers, qId: string, value: OptionId) {
     setAnswers((prev) => ({
       ...prev,
       [field]: { ...prev[field], [qId]: value },
@@ -241,7 +243,7 @@ export default function ApplyPage({
         <div className="text-xs tracking-widest text-slate-500">応募フォーム · token: {token}</div>
         <h1 className="text-2xl font-bold">採用応募</h1>
         <p className="text-sm text-slate-600 mt-1">
-          所要時間 約15-20分。プロフィール → 経歴 → 診断(75問・5セクション) で完了します。
+          所要時間 約15-20分。プロフィール → 経歴 → 診断(72問・強制選択式・5セクション) で完了します。
         </p>
         <StepIndicator step={step} />
         {step === "diagnostic" && (
@@ -386,33 +388,45 @@ export default function ApplyPage({
               </div>
               <h2 className="font-bold text-lg">{currentSection.title}</h2>
               <p className="text-sm text-slate-600 mt-1">{currentSection.description}</p>
+              <p className="text-xs text-slate-500 mt-2">
+                ※ 4つの選択肢から、いまの自分に最も近いものを1つだけ選んでください。「正解」はありません。
+              </p>
             </div>
-            <div className="space-y-4">
+            <div className="space-y-5">
               {sectionQuestionsExtended.map((q) => {
                 const field = q.category === "FZ" ? "aSeparation" : currentSection.field;
                 const sel = answers[field][q.id];
                 return (
-                  <div key={q.id} className="border-t border-slate-100 pt-3">
-                    <div className="text-sm font-medium mb-2 text-slate-800">
+                  <div key={q.id} className="border-t border-slate-100 pt-4">
+                    <div className="text-sm font-medium mb-3 text-slate-800">
                       <span className="font-mono text-xs text-slate-400 mr-2">{q.id}</span>
                       {q.text}
                     </div>
-                    <div className="grid grid-cols-5 gap-1.5">
-                      {([1, 2, 3, 4, 5] as LikertValue[]).map((v) => {
-                        const isSelected = sel === v;
+                    <div className="grid gap-2">
+                      {q.options.map((opt) => {
+                        const isSelected = sel === opt.id;
                         return (
                           <button
-                            key={v}
-                            onClick={() => setAnswer(field, q.id, v)}
+                            key={opt.id}
+                            onClick={() => setAnswer(field, q.id, opt.id)}
                             className={
-                              "px-2 py-2 rounded-lg border text-xs transition-colors " +
+                              "text-left px-4 py-3 rounded-lg border text-sm transition-colors flex items-start gap-3 " +
                               (isSelected
-                                ? "bg-brand-500 text-white border-brand-500"
-                                : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600")
+                                ? "bg-brand-50 border-brand-500 text-slate-900 ring-2 ring-brand-200"
+                                : "bg-white border-slate-200 hover:bg-slate-50 text-slate-700")
                             }
                           >
-                            <div className="font-bold mb-0.5">{v}</div>
-                            <div className="text-[10px] leading-tight">{LIKERT_LABELS[v]}</div>
+                            <span
+                              className={
+                                "shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold mt-0.5 " +
+                                (isSelected
+                                  ? "bg-brand-500 text-white"
+                                  : "bg-slate-100 text-slate-500")
+                              }
+                            >
+                              {opt.id}
+                            </span>
+                            <span className="leading-relaxed">{opt.text}</span>
                           </button>
                         );
                       })}

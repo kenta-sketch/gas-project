@@ -1,6 +1,8 @@
-// クアッドマインド診断 採点ロジック(完全仕様書 v1.0 準拠)
-// 出典: docs/theory/notes/2026-05-11-diagnostic-spec-v1.md
+// クアッドマインド診断 採点エンジン v3.0
+// 仕様: docs/theory/notes/2026-05-12-scoring-engine-v3.md
+// 強制選択式 + 3スコア方式(Axis Score / Preference Score / Low Evidence Index) + マトリクス採点
 
+import { SCORING_BY_QID, getScoringRecord } from "@/data/scoring-db-v3";
 import {
   AXIS_QUESTIONS,
   A_SEPARATION_QUESTIONS,
@@ -25,67 +27,236 @@ import type {
   OrgRiskDiagnosis,
   OrgRiskFlag,
   OrgRiskCategory,
+  PreferenceScore,
+  LowEvidenceIndex,
+  NeutralFrequency,
+  OptionId,
+  ScoringRecord,
+  TargetAxis,
   DiagnosticQuestion,
-  LikertValue,
 } from "./types";
 
 // ============================================================
-// 共通: 重み付きスコア計算 + 25点満点への正規化
+// クロス加点の重み (仕様書 第4章)
 // ============================================================
-function weightedSum(
-  questions: DiagnosticQuestion[],
-  answers: Record<string, LikertValue>,
-): { raw: number; max: number } {
-  let raw = 0;
-  let max = 0;
-  for (const q of questions) {
-    const a = answers[q.id];
-    if (a === undefined) continue;
-    const reversed = q.kind === "reverse" ? 6 - a : a;
-    raw += reversed * q.weight;
-    max += 5 * q.weight;
+const CROSS_WEIGHT = 0.7;       // 他軸質問のPrimary Axis加点
+const CORE_WEIGHT = 1.5;        // コア質問の主軸加点(scoring DB weight=1.5)
+const SUPPORT_WEIGHT = 1.0;     // 補助質問の主軸加点(scoring DB weight=1.0)
+const REVERSE_WEIGHT = 1.0;     // 逆転項目(scoring DB weight=1.0)
+
+// ============================================================
+// 全回答を採点キーDBに突き合わせて、レコード列を返すヘルパー
+// ============================================================
+interface AnsweredRecord {
+  qid: string;
+  option: OptionId;
+  record: ScoringRecord;
+}
+
+function collectAnswered(answers: DiagnosticAnswers): AnsweredRecord[] {
+  const out: AnsweredRecord[] = [];
+  const allMaps: Record<string, OptionId>[] = [
+    answers.axis,
+    answers.aSeparation,
+    answers.integration,
+    answers.responsibility,
+    answers.orgRisk,
+  ];
+  for (const m of allMaps) {
+    for (const qid of Object.keys(m)) {
+      const opt = m[qid];
+      const rec = getScoringRecord(qid, opt);
+      if (rec) out.push({ qid, option: opt, record: rec });
+    }
   }
-  return { raw, max };
-}
-
-function scaleTo(rawSum: { raw: number; max: number }, target: number): number {
-  if (rawSum.max === 0) return 0;
-  return Math.round((rawSum.raw / rawSum.max) * target);
+  return out;
 }
 
 // ============================================================
-// A軸〜D軸スコア(25点満点)
+// Axis Score (本人向け基本スコア・25点満点)
+// 主軸質問でその軸の選択肢を選んだときの target_credit × weight を合計し、満点で正規化
 // ============================================================
-export function computeAxisScores(answers: DiagnosticAnswers): AxisScores {
-  const result: AxisScores = { A: 0, B: 0, C: 0, D: 0 };
-  (["A", "B", "C", "D"] as AxisKey[]).forEach((axis) => {
-    const qs = AXIS_QUESTIONS.filter((q) => q.category === `axis_${axis}`);
-    result[axis] = scaleTo(weightedSum(qs, answers.axis), 25);
+export function computeAxisScores(answered: AnsweredRecord[]): AxisScores {
+  const axes: AxisKey[] = ["A", "B", "C", "D"];
+  const out: AxisScores = { A: 0, B: 0, C: 0, D: 0 };
+
+  for (const axis of axes) {
+    let raw = 0;
+    let max = 0;
+    // この軸を測る質問群(target_axis === axis、Observerを除く)
+    for (const ar of answered) {
+      const r = ar.record;
+      if (r.is_observer) continue;
+      if (r.target_axis !== axis) continue;
+      raw += r.weight * r.target_credit;
+    }
+    // 満点 = 各質問の(weight × 最大target_credit=1)の合計
+    // 質問IDをユニーク化して計算
+    const targetQids = new Set<string>();
+    for (const rec of Object.values(SCORING_BY_QID)) {
+      if (rec[0].target_axis === axis && !rec[0].is_observer) {
+        targetQids.add(rec[0].question_id);
+      }
+    }
+    for (const qid of targetQids) {
+      const rec = SCORING_BY_QID[qid];
+      if (rec) max += rec[0].weight; // weight × 1 (最大target_credit)
+    }
+    out[axis] = max > 0 ? Math.round((raw / max) * 25 * 10) / 10 : 0;
+  }
+  return out;
+}
+
+// ============================================================
+// Preference Score (反応スタイル・全質問通算)
+// 各選択肢の primary_axis に basedで、重み付き加点する
+// 主軸質問で当該軸 → CORE_WEIGHT / SUPPORT_WEIGHT
+// 他軸質問で当該軸 → CROSS_WEIGHT
+// is_observer / is_neutral / is_diagnostic_null は除外
+// ============================================================
+export function computePreferenceScore(answered: AnsweredRecord[]): PreferenceScore {
+  const out: PreferenceScore = { A: 0, B: 0, C: 0, D: 0 };
+  for (const ar of answered) {
+    const r = ar.record;
+    if (r.is_observer) continue;
+    if (r.is_neutral) continue;
+    if (r.is_diagnostic_null) continue;
+    const pa = r.primary_axis;
+    if (pa !== "A" && pa !== "B" && pa !== "C" && pa !== "D") continue;
+
+    // 主軸質問か他軸質問かで重みを変える
+    const targetIsAxis = r.target_axis === pa;
+    const weight = targetIsAxis ? r.weight : CROSS_WEIGHT;
+    out[pa] += weight;
+  }
+  // 小数1桁に丸める
+  (Object.keys(out) as AxisKey[]).forEach((k) => {
+    out[k] = Math.round(out[k] * 10) / 10;
   });
-  return result;
+  return out;
 }
 
 // ============================================================
-// G2: A発火/A表出分離(25点満点)
+// Low Evidence Index (内部判定用・25点満点)
+// 各軸の逆転項目の Low Evidence × weight を合計し、満点で正規化
+// is_neutral=1 は除外、is_diagnostic_null=1 は含む
 // ============================================================
-export function computeASeparation(answers: DiagnosticAnswers): ASeparation {
-  const iAQs = A_SEPARATION_QUESTIONS.filter((q) => q.category === "iA");
-  const eAQs = A_SEPARATION_QUESTIONS.filter((q) => q.category === "eA");
-  const internal = scaleTo(weightedSum(iAQs, answers.aSeparation), 25);
-  const external = scaleTo(weightedSum(eAQs, answers.aSeparation), 25);
+export function computeLowEvidenceIndex(answered: AnsweredRecord[]): LowEvidenceIndex {
+  const axes: AxisKey[] = ["A", "B", "C", "D"];
+  const out: LowEvidenceIndex = { A: 0, B: 0, C: 0, D: 0 };
 
-  // FZ判定: 内的A高 × 表出A低 のみFZ問題が回答されている
-  const fzAnswers = FZ_QUESTIONS.filter((q) => answers.aSeparation[q.id] !== undefined);
-  const fzAvg =
-    fzAnswers.length > 0
-      ? fzAnswers.reduce((s, q) => s + (answers.aSeparation[q.id] ?? 0), 0) / fzAnswers.length
-      : 0;
-  const frozen = fzAvg >= 3.5; // 平均3.5以上で凍結フラグ
+  for (const axis of axes) {
+    let raw = 0;
+    let max = 0;
 
-  let classification: AClassification;
+    // 該当軸の逆転項目を集計
+    const reverseQids = new Set<string>();
+    for (const recs of Object.values(SCORING_BY_QID)) {
+      const r0 = recs[0];
+      if (r0.target_axis === axis && r0.is_reverse) {
+        reverseQids.add(r0.question_id);
+      }
+    }
+
+    for (const ar of answered) {
+      const r = ar.record;
+      if (!r.is_reverse) continue;
+      if (r.is_neutral) continue;
+      if (r.target_axis !== axis) continue;
+      raw += r.weight * r.low_evidence;
+    }
+    for (const qid of reverseQids) {
+      const rec = SCORING_BY_QID[qid];
+      if (rec) max += rec[0].weight;
+    }
+    out[axis] = max > 0 ? Math.round((raw / max) * 25 * 10) / 10 : 0;
+  }
+  return out;
+}
+
+// ============================================================
+// Neutral Frequency
+// ============================================================
+export function computeNeutralFrequency(answered: AnsweredRecord[]): NeutralFrequency {
+  let total = 0;
+  const byTargetAxis: Partial<Record<TargetAxis, number>> = {};
+  let aTotal = 0;
+  let aNeutral = 0;
+
+  for (const ar of answered) {
+    if (ar.record.is_neutral) {
+      total++;
+      const t = ar.record.target_axis;
+      byTargetAxis[t] = (byTargetAxis[t] ?? 0) + 1;
+    }
+    if (ar.record.target_axis === "A") {
+      aTotal++;
+      if (ar.record.is_neutral) aNeutral++;
+    }
+  }
+
+  const totalAnswered = answered.length;
+  const totalPct = totalAnswered > 0 ? (total / totalAnswered) * 100 : 0;
+  const aNeutralPct = aTotal > 0 ? (aNeutral / aTotal) * 100 : 0;
+
+  return {
+    total,
+    totalPct: Math.round(totalPct * 10) / 10,
+    byTargetAxis,
+    flagAll30: totalPct >= 30,
+    flagANeutral50: aNeutralPct >= 50,
+  };
+}
+
+// ============================================================
+// G2: A発火/A表出分離 (25点満点)
+// ============================================================
+export function computeASeparation(answered: AnsweredRecord[]): ASeparation {
+  // 内的A = target_axis = "iA" の target_credit 加重平均
+  // 表出A = target_axis = "eA" の target_credit 加重平均
+  const sumByTarget = (targetAxis: TargetAxis): number => {
+    let raw = 0;
+    let max = 0;
+    const qids = new Set<string>();
+    for (const recs of Object.values(SCORING_BY_QID)) {
+      if (recs[0].target_axis === targetAxis) qids.add(recs[0].question_id);
+    }
+    for (const ar of answered) {
+      if (ar.record.target_axis !== targetAxis) continue;
+      raw += ar.record.weight * ar.record.target_credit;
+    }
+    for (const qid of qids) {
+      const rec = SCORING_BY_QID[qid];
+      if (rec) max += rec[0].weight;
+    }
+    return max > 0 ? (raw / max) * 25 : 0;
+  };
+
+  const internal = Math.round(sumByTarget("iA") * 10) / 10;
+  const external = Math.round(sumByTarget("eA") * 10) / 10;
+
+  // FZ判定: FZ問題が回答されていて、target_credit加重平均が高い
+  const fzAnswers = answered.filter((a) => a.record.target_axis === "FZ");
+  let fzRaw = 0;
+  let fzMax = 0;
+  const fzQids = new Set<string>();
+  for (const recs of Object.values(SCORING_BY_QID)) {
+    if (recs[0].target_axis === "FZ") fzQids.add(recs[0].question_id);
+  }
+  for (const ar of fzAnswers) {
+    fzRaw += ar.record.weight * ar.record.target_credit;
+  }
+  for (const qid of fzQids) {
+    const rec = SCORING_BY_QID[qid];
+    if (rec) fzMax += rec[0].weight;
+  }
+  const fzNormalized = fzMax > 0 ? (fzRaw / fzMax) * 25 : 0;
+  const frozen = fzAnswers.length >= 2 && fzNormalized >= 15;
+
   const INTERNAL_THRESHOLD = 13;
   const EXTERNAL_THRESHOLD = 13;
 
+  let classification: AClassification;
   if (internal < INTERNAL_THRESHOLD && external < EXTERNAL_THRESHOLD) {
     classification = "真性A低";
   } else if (internal >= INTERNAL_THRESHOLD && external < EXTERNAL_THRESHOLD) {
@@ -100,17 +271,32 @@ export function computeASeparation(answers: DiagnosticAnswers): ASeparation {
 }
 
 // ============================================================
-// G4: 統合状態の直接検出
+// G4: 統合状態 (Observer + Switch、A/B/C/D に交絡しない)
 // ============================================================
 export function computeIntegration(
-  answers: DiagnosticAnswers,
+  answered: AnsweredRecord[],
   axisScores: AxisScores,
 ): IntegrationDiagnosis {
-  const obQs = INTEGRATION_QUESTIONS.filter((q) => q.category === "OB");
-  const swQs = INTEGRATION_QUESTIONS.filter((q) => q.category === "SW");
-  // 各セクション 30点満点に正規化
-  const observerScore = scaleTo(weightedSum(obQs, answers.integration), 30);
-  const switchScore = scaleTo(weightedSum(swQs, answers.integration), 30);
+  const scoreFor = (targetAxis: TargetAxis): number => {
+    let raw = 0;
+    let max = 0;
+    const qids = new Set<string>();
+    for (const recs of Object.values(SCORING_BY_QID)) {
+      if (recs[0].target_axis === targetAxis) qids.add(recs[0].question_id);
+    }
+    for (const ar of answered) {
+      if (ar.record.target_axis !== targetAxis) continue;
+      raw += ar.record.weight * ar.record.target_credit;
+    }
+    for (const qid of qids) {
+      const rec = SCORING_BY_QID[qid];
+      if (rec) max += rec[0].weight;
+    }
+    return max > 0 ? (raw / max) * 25 : 0;
+  };
+
+  const observerScore = Math.round(scoreFor("OB") * 10) / 10;
+  const switchScore = Math.round(scoreFor("SW") * 10) / 10;
   const index = (observerScore + switchScore) / 2;
 
   const allAxes = [axisScores.A, axisScores.B, axisScores.C, axisScores.D];
@@ -135,23 +321,23 @@ export function computeIntegration(
 }
 
 // ============================================================
-// G3: 責任感の3形態
+// G3: 責任感の3形態 (各3問、最高型を主、差3点未満は複合型)
+// 各 target_axis (DR / BR / AR) の target_credit 合計
 // ============================================================
-export function computeResponsibility(
-  answers: DiagnosticAnswers,
-): ResponsibilityDiagnosis {
-  const drQs = RESPONSIBILITY_QUESTIONS.filter((q) => q.category === "DR");
-  const brQs = RESPONSIBILITY_QUESTIONS.filter((q) => q.category === "BR");
-  const arQs = RESPONSIBILITY_QUESTIONS.filter((q) => q.category === "AR");
-  // 各4問×1〜5 = 4〜20点
-  const drSum = drQs.reduce((s, q) => s + (answers.responsibility[q.id] ?? 0), 0);
-  const brSum = brQs.reduce((s, q) => s + (answers.responsibility[q.id] ?? 0), 0);
-  const arSum = arQs.reduce((s, q) => s + (answers.responsibility[q.id] ?? 0), 0);
+export function computeResponsibility(answered: AnsweredRecord[]): ResponsibilityDiagnosis {
+  const sumFor = (targetAxis: TargetAxis): number => {
+    let s = 0;
+    for (const ar of answered) {
+      if (ar.record.target_axis !== targetAxis) continue;
+      s += ar.record.weight * ar.record.target_credit;
+    }
+    return Math.round(s * 10) / 10;
+  };
 
   const scores: Record<ResponsibilityKind, number> = {
-    D型: drSum,
-    B型: brSum,
-    A型: arSum,
+    D型: sumFor("DR"),
+    B型: sumFor("BR"),
+    A型: sumFor("AR"),
   };
 
   const sorted = (Object.keys(scores) as ResponsibilityKind[]).sort(
@@ -159,7 +345,8 @@ export function computeResponsibility(
   );
   const primary = sorted[0];
   const secondary = sorted[1];
-  const isCompound = scores[primary] - scores[secondary] < 3;
+  // 各型最大3点なので差0.5未満で複合型
+  const isCompound = Math.abs(scores[primary] - scores[secondary]) < 0.5;
 
   return {
     scores,
@@ -170,28 +357,32 @@ export function computeResponsibility(
 }
 
 // ============================================================
-// G5: 組織毀損プロファイル
+// G5: 組織毀損プロファイル (各3問。閾値超過でフラグ)
 // ============================================================
-function computeRiskCategory(
+function riskCategory(
   category: OrgRiskCategory,
-  prefix: "AG" | "RV" | "IM",
-  answers: DiagnosticAnswers,
+  targetAxis: TargetAxis,
+  answered: AnsweredRecord[],
 ): OrgRiskFlag | null {
-  const qs = ORG_RISK_QUESTIONS.filter((q) => q.category === prefix);
-  const sum = qs.reduce((s, q) => s + (answers.orgRisk[q.id] ?? 0), 0);
-  // 3問×1〜5 = 3〜15点
+  let score = 0;
+  for (const ar of answered) {
+    if (ar.record.target_axis !== targetAxis) continue;
+    score += ar.record.weight * ar.record.target_credit;
+  }
+  score = Math.round(score * 10) / 10;
+  // 各3問・各最大1点 = 0〜3点
   let level: "low" | "medium" | "high";
-  if (sum >= 12) level = "high";
-  else if (sum >= 9) level = "medium";
-  else return null; // 閾値未満ならフラグ立てない
-  return { category, score: sum, level };
+  if (score >= 2.5) level = "high";
+  else if (score >= 1.5) level = "medium";
+  else return null;
+  return { category, score, level };
 }
 
-export function computeOrgRisk(answers: DiagnosticAnswers): OrgRiskDiagnosis {
+export function computeOrgRisk(answered: AnsweredRecord[]): OrgRiskDiagnosis {
   const flags: OrgRiskFlag[] = [];
-  const ag = computeRiskCategory("承認略奪型", "AG", answers);
-  const rv = computeRiskCategory("ルール暴力型", "RV", answers);
-  const im = computeRiskCategory("衝動暴走型", "IM", answers);
+  const ag = riskCategory("承認略奪型", "AG", answered);
+  const rv = riskCategory("ルール暴力型", "RV", answered);
+  const im = riskCategory("衝動暴走型", "IM", answered);
   if (ag) flags.push(ag);
   if (rv) flags.push(rv);
   if (im) flags.push(im);
@@ -205,21 +396,17 @@ export function judgeType(
   scores: AxisScores,
   aSep: ASeparation,
   integration: IntegrationDiagnosis,
-  orgRisk: OrgRiskDiagnosis,
+  _orgRisk: OrgRiskDiagnosis,
 ): QuadType {
-  // 1. 癌候補フラグは最優先(注: 本人向け出力ではこの型名を見せない)
-  //    high レベルの組織毀損があれば、専門的ラベルとして残す
-  //    ※ 実際の表示は呼び出し側で「内部出力」と「外部出力」を分ける
-
-  // 2. A発火/表出の乖離(A抑圧/A凍結が高優先)
+  // 1. A凍結フラグは最優先
   if (aSep.classification === "A凍結型") return "A凍結型";
   if (aSep.classification === "A抑圧型") return "A抑圧型";
 
-  // 3. 統合状態
+  // 2. 統合状態
   if (integration.status === "本物の統合") return "統合型";
   if (integration.status === "偽の中庸") return "中庸偽装型";
 
-  // 4. 単独運転(一軸突出 + 他が低い)
+  // 3. 単独運転(一軸突出 + 他が低い)
   const sorted = (Object.keys(scores) as AxisKey[]).sort(
     (a, b) => scores[b] - scores[a],
   );
@@ -230,33 +417,19 @@ export function judgeType(
     return "単独運転型";
   }
 
-  // 5. 主軸×副軸での6タイプ分類
-  // 突破型: A主軸 + C副軸
-  // 共感型: B主軸 + C副軸
-  // 設計型: D主軸 + C副軸
-  // 忠実型: B主軸 + D副軸
-  // 直感型: C主軸 + A副軸
-  // 分析型: D主軸 + B副軸
-  // 蓄積型: C主軸 + B副軸
+  // 4. 主軸×副軸での6タイプ分類
   const combo = `${top}+${second}`;
   switch (combo) {
-    case "A+C":
-      return "突破型";
-    case "B+C":
-      return "共感型";
-    case "D+C":
-      return "設計型";
-    case "B+D":
-      return "忠実型";
-    case "C+A":
-      return "直感型";
-    case "D+B":
-      return "分析型";
-    case "C+B":
-      return "蓄積型";
+    case "A+C": return "突破型";
+    case "B+C": return "共感型";
+    case "D+C": return "設計型";
+    case "B+D": return "忠実型";
+    case "C+A": return "直感型";
+    case "D+B": return "分析型";
+    case "C+B": return "蓄積型";
   }
 
-  // フォールバック: 主軸ベースで最も近い
+  // フォールバック
   if (top === "A") return "突破型";
   if (top === "B") return "共感型";
   if (top === "C") return "直感型";
@@ -270,14 +443,21 @@ export function computeFullDiagnosis(
   answers: DiagnosticAnswers,
   emotions: EmotionScores,
 ): DiagnosticResult {
-  const scores = computeAxisScores(answers);
-  const aSeparation = computeASeparation(answers);
-  const integration = computeIntegration(answers, scores);
-  const responsibility = computeResponsibility(answers);
-  const orgRisk = computeOrgRisk(answers);
+  const answered = collectAnswered(answers);
+  const scores = computeAxisScores(answered);
+  const preference = computePreferenceScore(answered);
+  const lowEvidence = computeLowEvidenceIndex(answered);
+  const neutral = computeNeutralFrequency(answered);
+  const aSeparation = computeASeparation(answered);
+  const integration = computeIntegration(answered, scores);
+  const responsibility = computeResponsibility(answered);
+  const orgRisk = computeOrgRisk(answered);
   const primaryType = judgeType(scores, aSeparation, integration, orgRisk);
   return {
     scores,
+    preference,
+    lowEvidence,
+    neutral,
     emotions,
     aSeparation,
     integration,
@@ -306,13 +486,14 @@ export function defaultEmotionScores(): EmotionScores {
   return { fear: 3, sadness: 3, anger: 3, joy: 3, happiness: 3 };
 }
 
-// ============================================================
-// 旧 Q1-Q9 互換性のための関数(段階的廃止)
-// ============================================================
+// 旧 Q1-Q9 互換
 export function legacyComputeAxisScores(): AxisScores {
   return { A: 0, B: 0, C: 0, D: 0 };
 }
 
+// ============================================================
+// 1年後パターン
+// ============================================================
 export interface YearLaterPattern {
   label: string;
   description: string;
@@ -321,10 +502,9 @@ export interface YearLaterPattern {
 }
 
 export function suggestYearLaterPattern(
-  scores: AxisScores,
+  _scores: AxisScores,
   type: QuadType,
 ): YearLaterPattern {
-  // 12タイプ対応のパターン例
   if (type === "突破型") {
     return {
       label: "突破→統合進化",
@@ -392,3 +572,12 @@ export function applyEmotionDelta(
   });
   return out;
 }
+
+// 未使用だが互換のため exports
+export const _unusedAxisQuestionsImport = AXIS_QUESTIONS.length;
+export const _unusedASepImport = A_SEPARATION_QUESTIONS.length;
+export const _unusedFZImport = FZ_QUESTIONS.length;
+export const _unusedIntImport = INTEGRATION_QUESTIONS.length;
+export const _unusedRespImport = RESPONSIBILITY_QUESTIONS.length;
+export const _unusedRiskImport = ORG_RISK_QUESTIONS.length;
+type _q = DiagnosticQuestion;

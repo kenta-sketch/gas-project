@@ -91,6 +91,14 @@ export default function ApplyPage({
     return iAAvg >= 3.5 && eAAvg < 3.0;
   }, [answers.aSeparation]);
 
+  const currentSection = QUESTION_SECTIONS[diagSectionIdx];
+  const sectionQuestionsExtended = useMemo(() => {
+    if (currentSection.id === "aSeparation" && showFZ) {
+      return [...currentSection.questions, ...FZ_QUESTIONS];
+    }
+    return currentSection.questions;
+  }, [currentSection, showFZ]);
+
   if (!settings) return <div>読み込み中...</div>;
 
   const useQuestions = settings.inputMode === "questions" || settings.inputMode === "both";
@@ -105,14 +113,6 @@ export default function ApplyPage({
     if (settings && settings.inputMode === "both") return (education && workHistory) || resumeData;
     return false;
   }
-
-  const currentSection = QUESTION_SECTIONS[diagSectionIdx];
-  const sectionQuestionsExtended = useMemo(() => {
-    if (currentSection.id === "aSeparation" && showFZ) {
-      return [...currentSection.questions, ...FZ_QUESTIONS];
-    }
-    return currentSection.questions;
-  }, [currentSection, showFZ]);
 
   const sectionAnswered = sectionQuestionsExtended.every((q) => {
     return answers[currentSection.field][q.id] !== undefined;

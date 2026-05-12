@@ -3,7 +3,7 @@
 このフォルダはクアッドマインド理論プロジェクトに関する全資料の索引。
 材料が来たらここに1行追加し、本体は適切なサブフォルダへ。
 
-最終更新: 2026-05-12(採点エンジン v3.0 + 強制選択式 完全統合仕様書を受領)
+最終更新: 2026-05-12(122人実証分析 → v3.0 強制選択式の実装差し戻し決定。v1.0 Likert を主に継続)
 
 ---
 
@@ -34,6 +34,21 @@
 ---
 
 ## 受信ログ(時系列)
+
+### 2026-05-12 (★決定: v3.0実装差し戻し + 122人実証分析)
+
+健太さん運用の既存 Google フォーム(v1.0 Likert形式)に **122人の生回答** が蓄積されている事実を発見。
+内山健太・飯淵賢男 二人で実証データを確認した結果、**v3.0 強制選択式の本実装(コード)は差し戻し、v1.0 Likert ベースを継続採用**することに合意。
+
+| 元ファイル | 整形ノート / 保存先 | 状態 |
+|---|---|---|
+| クアットマインド理論 診断結果.xlsx (122人 v1.0 Likert生データ) | `notes/2026-05-12-likert-120-empirical-analysis.md` + `scoring-db/2026-05-12-likert-120-respondents.xlsx` | ✓整形済(★決定ノート) |
+
+**主な決定事項**:
+- v3.0 強制選択式コード(`7a23161` / `7726d5a` / `ca28f82`)を revert
+- v3.0 仕様書・採点キーDB(`3b1b728`)は `docs/theory/` 配下に保存して維持(将来の理論検証用)
+- 自動保存機能(localStorage ドラフト)は v1.0 Likert コードベース上に再実装
+- 次フェーズ: Response Style 第2層変数の実装、回答時間計測、C軸質問の見直し
 
 ### 2026-05-12 (採点エンジン v3.0 + 強制選択式 完全統合仕様書)
 
@@ -155,12 +170,17 @@
 - [`notes/2026-05-03-japan-vs-brazil-civilization.md`](./notes/2026-05-03-japan-vs-brazil-civilization.md) ── 日本×ブラジル文明比較
 
 ### ★ 診断仕様(プロダクト実装の決定版)
-- [`notes/2026-05-12-scoring-engine-v3.md`](./notes/2026-05-12-scoring-engine-v3.md) ── ★**採点エンジン v3.0 + 強制選択式 (最新・推奨実装)**
-- [`pdfs/2026-05-12-scoring-engine-v33.pdf`](./pdfs/2026-05-12-scoring-engine-v33.pdf) ── 原本PDF
-- [`pdfs/2026-05-12-master-spec.docx`](./pdfs/2026-05-12-master-spec.docx) ── 完全統合仕様書 docx
-- [`scoring-db/quadmind-scoring-db-v3.json`](./scoring-db/quadmind-scoring-db-v3.json) ── 採点キーDB(72問 × 4選択肢 = 288行)
-- [`notes/2026-05-11-diagnostic-spec-v1.md`](./notes/2026-05-11-diagnostic-spec-v1.md) ── (旧)診断完全仕様書 v1.0 (Likert + G1〜G6)
-- [`pdfs/2026-05-XX-diagnostic-spec-v1.pdf`](./pdfs/2026-05-XX-diagnostic-spec-v1.pdf) ── (旧)原本PDF
+- [`notes/2026-05-12-likert-120-empirical-analysis.md`](./notes/2026-05-12-likert-120-empirical-analysis.md) ── ★★ **122人実証分析 + v3.0差し戻し決定(2026-05-12)・現在の方針**
+- [`scoring-db/2026-05-12-likert-120-respondents.xlsx`](./scoring-db/2026-05-12-likert-120-respondents.xlsx) ── 122人の生回答データ
+- [`notes/2026-05-11-diagnostic-spec-v1.md`](./notes/2026-05-11-diagnostic-spec-v1.md) ── **★ クアッドマインド診断 完全仕様書 v1.0 (G1〜G6完全実装版・現在の本流)**
+- [`pdfs/2026-05-XX-diagnostic-spec-v1.pdf`](./pdfs/2026-05-XX-diagnostic-spec-v1.pdf) ── v1.0 原本PDF
+
+### 強制選択式 v3.0 (アーカイブ・将来の理論検証用)
+- [`notes/2026-05-12-scoring-engine-v3.md`](./notes/2026-05-12-scoring-engine-v3.md) ── 採点エンジン v3.0 + 強制選択式 完全統合仕様書(2026-05-12 受領)
+- [`pdfs/2026-05-12-scoring-engine-v33.pdf`](./pdfs/2026-05-12-scoring-engine-v33.pdf) ── v3.0 原本PDF
+- [`pdfs/2026-05-12-master-spec.docx`](./pdfs/2026-05-12-master-spec.docx) ── v3.0 完全統合仕様書 docx
+- [`scoring-db/quadmind-scoring-db-v3.json`](./scoring-db/quadmind-scoring-db-v3.json) ── v3.0 採点キーDB(72問 × 4選択肢 = 288行)
+- **注**: v3.0 のコード実装は 2026-05-12 に差し戻し(revert)。設計者2名でデータが機能しなかったため。仕様書とDBは将来の検証用に保存。
 
 ---
 
@@ -201,7 +221,12 @@ related:
 - [x] **G1〜G6 理論ギャップの言語化** ── 友人が完全仕様書として提供(2026-05-11、`notes/2026-05-11-diagnostic-spec-v1.md`)
 - [x] **★ G1〜G6 を Q1-Q9体系から75問体系へ実装移行**(完了。`d577621` Phase 1-3 + `67c05bb` で実装)
 - [x] **採点エンジン v3.0 + 強制選択式 完全統合仕様書 受領**(2026-05-12、`notes/2026-05-12-scoring-engine-v3.md`)
-- [ ] **★ v3.0 強制選択式への実装移行**(types/questions/scoring/apply UI の大規模改修。詳細は v3 ノート末尾参照)
+- [x] **v3.0 強制選択式への実装移行**(完了したが設計者2名で機能せず、同日差し戻し)
+- [x] **★ 122人実証データ分析と v3.0 差し戻し決定**(2026-05-12、`notes/2026-05-12-likert-120-empirical-analysis.md`)
+- [ ] **★ Response Style Profile を第2層変数として実装**(Modest/Discriminant/Extreme 分類、加点バイアス補正)
+- [ ] **回答時間ロギング**(質問IDごとに Date.now() 差分、慎重型/即断型/長考点の判別)
+- [ ] **C軸質問の見直し**(SD=1.18 と弁別力低、特に「危険を直感で回避」SD=1.02)
+- [ ] **健全度指標表示**(C高=健全、B高=不健全の実証相関を画面に反映)
 - [ ] **時系列再診断 + 週次行動ログ機能**(改善②③)
 - [ ] **12タイプ完全マッピング**を typeDescriptions に拡張
 - [ ] **内部出力(管理職向け) vs 外部出力(本人向け)の分離表示**

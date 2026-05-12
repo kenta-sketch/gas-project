@@ -27,45 +27,7 @@ export type AxisScores = Record<AxisKey, number>;
 export type EmotionScores = Record<EmotionKey, number>;
 
 // ============================================================
-// 採点エンジン v3.0 (強制選択式 + 3スコア方式)
-// ============================================================
-export type OptionId = "a" | "b" | "c" | "d";
-export const OPTION_IDS: readonly OptionId[] = ["a", "b", "c", "d"];
-
-// PrimaryAxis: 選択肢が示す主反応軸(A/B/C/D + サブ採点軸 OB/FZ/各責任感/各組織毀損 / null=中立)
-export type PrimaryAxis =
-  | "A" | "B" | "C" | "D"
-  | "OB"
-  | "FZ"
-  | "DR" | "BR" | "AR"
-  | "AG" | "RV" | "IM"
-  | null;
-
-// TargetAxis: 質問が測ろうとしている軸
-export type TargetAxis =
-  | "A" | "B" | "C" | "D"
-  | "iA" | "eA" | "FZ"
-  | "OB" | "SW"
-  | "DR" | "BR" | "AR"
-  | "AG" | "RV" | "IM";
-
-// 採点キーDB(288行)1行分の型
-export interface ScoringRecord {
-  question_id: string;
-  option: OptionId;
-  primary_axis: PrimaryAxis;
-  target_axis: TargetAxis;
-  target_credit: number; // 0 / 0.5 / 1
-  low_evidence: number;  // 0 / 0.5 / 1
-  weight: number;        // 1.0 / 1.5
-  is_reverse: boolean;
-  is_observer: boolean;
-  is_neutral: boolean;
-  is_diagnostic_null: boolean;
-}
-
-// ============================================================
-// G6: 12タイプ完全マッピング
+// G6: 12タイプ完全マッピング(診断仕様書 v1.0)
 // ============================================================
 export type QuadType =
   | "統合型"
@@ -123,8 +85,8 @@ export type IntegrationStatus =
   | "単独運転";
 
 export interface IntegrationDiagnosis {
-  observerScore: number; // 0-25
-  switchScore: number; // 0-25
+  observerScore: number; // 0-30
+  switchScore: number; // 0-30
   index: number; // (observer + switch) / 2
   status: IntegrationStatus;
 }
@@ -135,9 +97,9 @@ export interface IntegrationDiagnosis {
 export type ResponsibilityKind = "D型" | "B型" | "A型";
 
 export interface ResponsibilityDiagnosis {
-  scores: Record<ResponsibilityKind, number>; // 0-3
+  scores: Record<ResponsibilityKind, number>; // 4-20点
   primary: ResponsibilityKind;
-  secondary?: ResponsibilityKind;
+  secondary?: ResponsibilityKind; // 複合型の場合
   isCompound: boolean;
 }
 
@@ -148,59 +110,44 @@ export type OrgRiskCategory = "承認略奪型" | "ルール暴力型" | "衝動
 
 export interface OrgRiskFlag {
   category: OrgRiskCategory;
-  score: number; // 0-3
+  score: number; // 3-15点
   level: "low" | "medium" | "high";
 }
 
 export interface OrgRiskDiagnosis {
-  flags: OrgRiskFlag[];
+  flags: OrgRiskFlag[]; // 閾値超過したものだけ
   hasAnyRisk: boolean;
 }
 
 // ============================================================
-// v3.0 新スコア: Preference Score / Low Evidence Index / Neutral Frequency
-// ============================================================
-export type PreferenceScore = Record<AxisKey, number>; // 全質問通算
-export type LowEvidenceIndex = Record<AxisKey, number>; // 0-25
-
-export interface NeutralFrequency {
-  total: number; // 中立選択肢を選んだ回数
-  totalPct: number; // 全問に対する%
-  byTargetAxis: Partial<Record<TargetAxis, number>>; // 軸別中立回数
-  flagAll30: boolean; // 全問30%以上で慢性疲弊/解離フラグ
-  flagANeutral50: boolean; // A軸質問50%以上でA無感覚フラグ
-}
-
-// ============================================================
-// 統合診断結果(全部入り、v3.0)
+// 統合診断結果(全部入り)
 // ============================================================
 export interface DiagnosticResult {
-  scores: AxisScores;           // Axis Score (本人向け基本スコア)
-  preference: PreferenceScore;  // Preference Score (反応スタイル)
-  lowEvidence: LowEvidenceIndex; // Low Evidence Index (内部判定)
-  neutral: NeutralFrequency;    // 中立選択肢頻度
+  scores: AxisScores;
   emotions: EmotionScores;
   aSeparation: ASeparation;
   integration: IntegrationDiagnosis;
   responsibility: ResponsibilityDiagnosis;
-  orgRisk: OrgRiskDiagnosis;
+  orgRisk: OrgRiskDiagnosis; // 内部出力のみで使う
   primaryType: QuadType;
 }
 
 // ============================================================
-// 診断回答(72問体系、強制選択式 a/b/c/d)
+// 診断回答(75問体系)
 // ============================================================
+export type LikertValue = 1 | 2 | 3 | 4 | 5;
+
 export interface DiagnosticAnswers {
-  // G1: 4軸 (A-1〜A-8, B-1〜B-8, C-1〜C-8, D-1〜D-8)
-  axis: Record<string, OptionId>;
-  // G2: A発火/表出 (iA-1〜iA-5, eA-1〜eA-5, FZ-1, FZ-2)
-  aSeparation: Record<string, OptionId>;
-  // G4: 統合状態 (OB-1〜OB-5, SW-1〜SW-5)
-  integration: Record<string, OptionId>;
-  // G3: 責任感 (DR-1〜DR-3, BR-1〜BR-3, AR-1〜AR-3)
-  responsibility: Record<string, OptionId>;
-  // G5: 組織毀損 (AG-1〜AG-3, RV-1〜RV-3, IM-1〜IM-3)
-  orgRisk: Record<string, OptionId>;
+  // 軸スコア用(A-1〜A-8, B-1〜B-8, C-1〜C-8, D-1〜D-8)
+  axis: Record<string, LikertValue>;
+  // G2: A発火/表出(iA-1〜iA-5, eA-1〜eA-5, FZ-1, FZ-2)
+  aSeparation: Record<string, LikertValue>;
+  // G4: 統合状態(OB-1〜OB-5, SW-1〜SW-5)
+  integration: Record<string, LikertValue>;
+  // G3: 責任感(DR-1〜DR-4, BR-1〜BR-4, AR-1〜AR-4)
+  responsibility: Record<string, LikertValue>;
+  // G5: 組織毀損(AG-1〜AG-3, RV-1〜RV-3, IM-1〜IM-3)
+  orgRisk: Record<string, LikertValue>;
 }
 
 // ============================================================
@@ -255,10 +202,12 @@ export interface InterviewRound {
 export interface Diagnosis {
   date: string;
   scenario: "応募時" | "採用時" | "1年後" | "再診断";
-  answers?: DiagnosticAnswers; // v3.0 強制選択回答
+  // 新75問体系の回答(オプション: seed データには無くてもよい)
+  answers?: DiagnosticAnswers;
   scores: AxisScores;
   emotions: EmotionScores;
   type: QuadType;
+  // 拡張診断データ(新フォーム経由ならフル、seedはオプション)
   result?: DiagnosticResult;
 }
 
@@ -325,7 +274,7 @@ export interface Employee {
 }
 
 // ============================================================
-// 質問体系(強制選択式)
+// 質問体系
 // ============================================================
 export type QuestionCategory =
   | "axis_A" | "axis_B" | "axis_C" | "axis_D"
@@ -334,15 +283,10 @@ export type QuestionCategory =
   | "DR" | "BR" | "AR"
   | "AG" | "RV" | "IM";
 
-export interface DiagnosticOption {
-  id: OptionId;
-  text: string;
-}
-
 export interface DiagnosticQuestion {
   id: string;
   text: string;
   category: QuestionCategory;
-  kind: "core" | "support" | "reverse";
-  options: readonly DiagnosticOption[]; // 必ず4つ
+  kind: "core" | "support" | "reverse"; // 種別
+  weight: number; // 1.0 or 1.5
 }

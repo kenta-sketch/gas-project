@@ -3,7 +3,7 @@
 このフォルダはクアッドマインド理論プロジェクトに関する全資料の索引。
 材料が来たらここに1行追加し、本体は適切なサブフォルダへ。
 
-最終更新: 2026-05-06(Drive 25ファイル受領分を反映)
+最終更新: 2026-05-12(採点エンジン v3.0 + 強制選択式 完全統合仕様書を受領)
 
 ---
 
@@ -14,10 +14,11 @@
 | `master-structure.md` | プロジェクト全体構造図(随時更新) |
 | `demo-spec-v1.md` | デモ画面開発仕様 v1 |
 | `llm-prompts-v1.md` | レポート生成LLMプロンプト草案 v1 |
-| `pdfs/` | 原本PDF(Drive ID参照のみ。バイナリ未保存) |
+| `pdfs/` | 原本PDF/docx(重要な仕様書のみバイナリ保存) |
 | `slides/` | スライド資料(Drive ID参照のみ) |
 | `notes/` | テキスト断片・PDF整形済みノート |
 | `voice/` | 音声書き起こし or 音声参照ノート |
+| `scoring-db/` | 採点キーDB(json / csv / sql)機械可読データ |
 
 ---
 
@@ -33,6 +34,19 @@
 ---
 
 ## 受信ログ(時系列)
+
+### 2026-05-12 (採点エンジン v3.0 + 強制選択式 完全統合仕様書)
+
+| 元ファイル | 整形ノート / 保存先 | 状態 |
+|---|---|---|
+| QuadMind 完全統合仕様書 Master.docx | `notes/2026-05-12-scoring-engine-v3.md` + `pdfs/2026-05-12-master-spec.docx` | ✓整形済(★最新版・v1.0 を強制選択式に全面更新) |
+| quadmind scoring engine v33.pdf | `pdfs/2026-05-12-scoring-engine-v33.pdf` | ✓原本保存 |
+| quadmind scoring db v3.json (288行) | `scoring-db/quadmind-scoring-db-v3.json` | ✓保存(機械可読) |
+| quadmind scoring db v3.csv | `scoring-db/quadmind-scoring-db-v3.csv` | ✓保存(JSONから再生成) |
+| quadmind scoring db v3.sql | `scoring-db/quadmind-scoring-db-v3.sql` | ✓保存(JSONから再生成) |
+
+**主な変更点**: Likert 5段階 → **強制選択式 4択** / 単純合計 → **3スコア方式**(Axis / Preference / Low Evidence) / クロス加点 ×0.7 / 中立選択肢の独立記録 / Observer の完全分離。
+**実装影響**: `types.ts` / `questions.ts` / `scoring.ts` / `apply/[token]/page.tsx` / `applicants.ts` の大規模改修が必要(詳細は `notes/2026-05-12-scoring-engine-v3.md` 末尾)。
 
 ### 2026-05-01 (初期セットアップ)
 
@@ -141,8 +155,12 @@
 - [`notes/2026-05-03-japan-vs-brazil-civilization.md`](./notes/2026-05-03-japan-vs-brazil-civilization.md) ── 日本×ブラジル文明比較
 
 ### ★ 診断仕様(プロダクト実装の決定版)
-- [`notes/2026-05-11-diagnostic-spec-v1.md`](./notes/2026-05-11-diagnostic-spec-v1.md) ── **クアッドマインド診断 完全仕様書 v1.0 (G1〜G6完全実装版)**
-- [`pdfs/2026-05-XX-diagnostic-spec-v1.pdf`](./pdfs/2026-05-XX-diagnostic-spec-v1.pdf) ── 原本PDF
+- [`notes/2026-05-12-scoring-engine-v3.md`](./notes/2026-05-12-scoring-engine-v3.md) ── ★**採点エンジン v3.0 + 強制選択式 (最新・推奨実装)**
+- [`pdfs/2026-05-12-scoring-engine-v33.pdf`](./pdfs/2026-05-12-scoring-engine-v33.pdf) ── 原本PDF
+- [`pdfs/2026-05-12-master-spec.docx`](./pdfs/2026-05-12-master-spec.docx) ── 完全統合仕様書 docx
+- [`scoring-db/quadmind-scoring-db-v3.json`](./scoring-db/quadmind-scoring-db-v3.json) ── 採点キーDB(72問 × 4選択肢 = 288行)
+- [`notes/2026-05-11-diagnostic-spec-v1.md`](./notes/2026-05-11-diagnostic-spec-v1.md) ── (旧)診断完全仕様書 v1.0 (Likert + G1〜G6)
+- [`pdfs/2026-05-XX-diagnostic-spec-v1.pdf`](./pdfs/2026-05-XX-diagnostic-spec-v1.pdf) ── (旧)原本PDF
 
 ---
 
@@ -181,8 +199,9 @@ related:
 
 - [x] **LINEトーク履歴の理論議論部分のチャンク抽出(2026年4-5月分)** ── 完了
 - [x] **G1〜G6 理論ギャップの言語化** ── 友人が完全仕様書として提供(2026-05-11、`notes/2026-05-11-diagnostic-spec-v1.md`)
-- [ ] **★ G1〜G6 を Q1-Q9体系から75問体系へ実装移行**(大規模改修)
-- [ ] **状況固定形式(リッカート→4択シーン)への質問UI改修**
+- [x] **★ G1〜G6 を Q1-Q9体系から75問体系へ実装移行**(完了。`d577621` Phase 1-3 + `67c05bb` で実装)
+- [x] **採点エンジン v3.0 + 強制選択式 完全統合仕様書 受領**(2026-05-12、`notes/2026-05-12-scoring-engine-v3.md`)
+- [ ] **★ v3.0 強制選択式への実装移行**(types/questions/scoring/apply UI の大規模改修。詳細は v3 ノート末尾参照)
 - [ ] **時系列再診断 + 週次行動ログ機能**(改善②③)
 - [ ] **12タイプ完全マッピング**を typeDescriptions に拡張
 - [ ] **内部出力(管理職向け) vs 外部出力(本人向け)の分離表示**

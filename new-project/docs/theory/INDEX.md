@@ -3,7 +3,7 @@
 このフォルダはクアッドマインド理論プロジェクトに関する全資料の索引。
 材料が来たらここに1行追加し、本体は適切なサブフォルダへ。
 
-最終更新: 2026-05-12(122人実証分析 → v3.0 強制選択式の実装差し戻し決定。v1.0 Likert を主に継続)
+最終更新: 2026-05-12(現行仕様書 v1.0+ を新規追加。Likert + 第2層変数 + AI個別分析の3層構造で確定)
 
 ---
 
@@ -170,11 +170,12 @@
 - [`notes/2026-05-03-japan-vs-brazil-civilization.md`](./notes/2026-05-03-japan-vs-brazil-civilization.md) ── 日本×ブラジル文明比較
 
 ### ★ 診断仕様(プロダクト実装の決定版)
-- [`notes/2026-05-12-iibuchi-action-items.md`](./notes/2026-05-12-iibuchi-action-items.md) ── ★★★ **飯淵さんへの課題まとめ(背景+論点+具体作業の整理、共有用)**
-- [`notes/2026-05-12-session-log-decisions.md`](./notes/2026-05-12-session-log-decisions.md) ── ★★★ **2026-05-12 セッションログ(v3受領→差し戻し→第2層変数実装の全経緯)**
-- [`notes/2026-05-12-likert-120-empirical-analysis.md`](./notes/2026-05-12-likert-120-empirical-analysis.md) ── ★★ **122人実証分析 + v3.0差し戻し決定**
+- [`notes/2026-05-12-current-spec-v1-likert.md`](./notes/2026-05-12-current-spec-v1-likert.md) ── ★★★★ **現行プロダクト仕様(v1 Likert + 第2層変数 + AI個別分析、現在の実装に対応)** ← まず読むならココ
+- [`notes/2026-05-12-iibuchi-action-items.md`](./notes/2026-05-12-iibuchi-action-items.md) ── ★★★ 飯淵さんへの課題まとめ(共有用)
+- [`notes/2026-05-12-session-log-decisions.md`](./notes/2026-05-12-session-log-decisions.md) ── ★★★ 2026-05-12 セッションログ(全経緯)
+- [`notes/2026-05-12-likert-120-empirical-analysis.md`](./notes/2026-05-12-likert-120-empirical-analysis.md) ── ★★ 122人実証分析
 - [`scoring-db/2026-05-12-likert-120-respondents.xlsx`](./scoring-db/2026-05-12-likert-120-respondents.xlsx) ── 122人の生回答データ
-- [`notes/2026-05-11-diagnostic-spec-v1.md`](./notes/2026-05-11-diagnostic-spec-v1.md) ── **★ クアッドマインド診断 完全仕様書 v1.0 (G1〜G6完全実装版・現在の本流)**
+- [`notes/2026-05-11-diagnostic-spec-v1.md`](./notes/2026-05-11-diagnostic-spec-v1.md) ── ★ クアッドマインド診断 完全仕様書 v1.0 (G1〜G6完全実装版・**理論原本**)
 - [`pdfs/2026-05-XX-diagnostic-spec-v1.pdf`](./pdfs/2026-05-XX-diagnostic-spec-v1.pdf) ── v1.0 原本PDF
 
 ### 強制選択式 v3.0 (アーカイブ・将来の理論検証用)

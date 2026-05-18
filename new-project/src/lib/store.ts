@@ -11,6 +11,7 @@ import type {
   Applicant,
   Settings,
   StageId,
+  StandaloneDiagnosis,
 } from "./types";
 import { APPLICANTS_SEED } from "@/data/applicants";
 import { DEFAULT_SETTINGS } from "@/data/settings";
@@ -171,6 +172,86 @@ export function upsertEmployee(employee: Employee) {
   const overrides = readEmployeeOverrides();
   overrides[employee.id] = employee;
   writeEmployeeOverrides(overrides);
+}
+
+// ============================================================
+// スタンドアロン診断(/diagnose 経由)
+// 応募者/社員に紐づかない、純粋な診断レコード
+// ============================================================
+const STANDALONE_LS_KEY = "qm-standalone-diagnoses";
+
+export function listStandaloneDiagnoses(): StandaloneDiagnosis[] {
+  if (typeof window === "undefined") return [];
+  const raw = window.localStorage.getItem(STANDALONE_LS_KEY);
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw) as StandaloneDiagnosis[];
+    return [...arr].sort((a, b) => b.date.localeCompare(a.date));
+  } catch {
+    return [];
+  }
+}
+
+export function findStandaloneDiagnosis(id: string): StandaloneDiagnosis | undefined {
+  return listStandaloneDiagnoses().find((d) => d.id === id);
+}
+
+export function upsertStandaloneDiagnosis(diagnosis: StandaloneDiagnosis) {
+  if (typeof window === "undefined") return;
+  const list = listStandaloneDiagnoses();
+  const idx = list.findIndex((d) => d.id === diagnosis.id);
+  if (idx >= 0) list[idx] = diagnosis;
+  else list.push(diagnosis);
+  try {
+    window.localStorage.setItem(STANDALONE_LS_KEY, JSON.stringify(list));
+  } catch {
+    // localStorage 容量超過は黙って続行
+  }
+}
+
+export function deleteStandaloneDiagnosis(id: string) {
+  if (typeof window === "undefined") return;
+  const list = listStandaloneDiagnoses().filter((d) => d.id !== id);
+  try {
+    window.localStorage.setItem(STANDALONE_LS_KEY, JSON.stringify(list));
+  } catch {
+    // ignore
+  }
+}
+
+export function newStandaloneDiagnosisId(): string {
+  return "diag_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+/**
+ * セルフ診断/再診断のドラフト保存(送信前の入力途中状態)
+ * 1ブラウザ・1キーで管理(複数同時並行はサポートしない)
+ */
+const STANDALONE_DRAFT_LS_KEY = "qm-standalone-diagnose-draft";
+
+export function loadStandaloneDraft<T>(): T | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(STANDALONE_DRAFT_LS_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+export function saveStandaloneDraft<T>(draft: T) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STANDALONE_DRAFT_LS_KEY, JSON.stringify(draft));
+  } catch {
+    // ignore
+  }
+}
+
+export function clearStandaloneDraft() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(STANDALONE_DRAFT_LS_KEY);
 }
 
 const ONEONONE_LS_KEY = "qm-demo-one-on-ones";

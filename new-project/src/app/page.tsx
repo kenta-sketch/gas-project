@@ -65,17 +65,18 @@ export default function HomePage() {
           accentClass="border-l-quad-d"
         />
         <SubCard
+          tag="セルフ診断"
+          title="診断だけ受ける"
+          desc="応募とは独立。自分の状態を把握するため何度でも受け直し可能。結果はブラウザに保存。"
+          link={{ href: "/diagnose", label: "セルフ診断を始める →" }}
+          accentClass="border-l-quad-a"
+        />
+        <SubCard
           tag="管理者向け"
           title="設定"
           desc="入力モード(質問形式/履歴書/併用)、選考段階のラベルを企業ごとにカスタマイズ。"
           link={{ href: "/admin/settings", label: "設定を開く →" }}
           accentClass="border-l-brand-500"
-        />
-        <SubCard
-          tag="デモの見方"
-          title="可視化参照点"
-          desc="完全機能網羅ではなく実運用フローの可視化を優先。本番では認証・監査ログ・OCR精緻化が入ります。"
-          accentClass="border-l-quad-b"
         />
       </section>
 

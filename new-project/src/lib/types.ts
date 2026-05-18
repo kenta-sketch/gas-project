@@ -268,6 +268,38 @@ export interface DiagnosticAnswers {
 }
 
 // ============================================================
+// スタンドアロン診断(/diagnose 経由・応募者/社員に紐づかない)
+// セルフ診断、社員の再診断、外部組込みの結果保存先として使う
+// ============================================================
+export interface StandaloneDiagnosis {
+  id: string;
+  date: string; // YYYY-MM-DD
+  profile: {
+    fullName: string;
+    ageRange: string;
+    gender: "男性" | "女性" | "その他";
+    /** 任意の文脈情報(職種・業種・属性などAI個別分析の参考) */
+    optionalContext?: string;
+    email?: string;
+  };
+  scores: AxisScores;
+  emotions: EmotionScores;
+  type: QuadType;
+  result?: DiagnosticResult;
+  /** AI個別分析結果(初回生成後キャッシュ) */
+  personalInsight?: PersonalInsight;
+  /** AI生成テキストレポートのキャッシュ */
+  reports?: {
+    self?: CachedReport;
+    manager?: CachedReport;
+  };
+  /** 別の StandaloneDiagnosis ID(時系列比較用、なければ単発) */
+  previousId?: string;
+  /** 任意のメモ */
+  notes?: string;
+}
+
+// ============================================================
 // 履歴書解析結果
 // ============================================================
 export interface ResumeData {

@@ -381,11 +381,102 @@ function OneOnOneSection({ employee }: { employee: Employee }) {
 // ──────────────────────────────────────────
 // 概要
 // ──────────────────────────────────────────
+// ──────────────────────────────────────────
+// 新規診断アクション(社員向け再診断・1年後診断)
+// ──────────────────────────────────────────
+function DiagnoseActions({ employee }: { employee: Employee }) {
+  const [showShare, setShowShare] = useState(false);
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+  const reDiagnoseUrl = `${baseUrl}/diagnose?employeeId=${employee.id}&scenario=再診断`;
+  const yearLaterUrl = `${baseUrl}/diagnose?employeeId=${employee.id}&scenario=1年後`;
+
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // clipboard 失敗時は無視
+    }
+  }
+
+  return (
+    <section className="bg-gradient-to-br from-emerald-50/40 to-white border border-emerald-200 rounded-xl p-4">
+      <div className="flex items-baseline justify-between mb-2">
+        <div>
+          <div className="text-[10px] tracking-[0.25em] uppercase text-emerald-700 font-bold">
+            新規診断を実施
+          </div>
+          <div className="text-sm text-slate-700 mt-0.5">
+            この社員に診断を受けてもらう。回答後、自動で診断履歴に追加されます。
+          </div>
+        </div>
+        <button
+          onClick={() => setShowShare((v) => !v)}
+          className="text-xs px-3 py-1.5 rounded border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-800 font-bold"
+        >
+          {showShare ? "閉じる" : "診断リンクを表示"}
+        </button>
+      </div>
+      {showShare && (
+        <div className="mt-3 space-y-3">
+          <DiagLinkRow label="再診断" url={reDiagnoseUrl} onCopy={copy} />
+          <DiagLinkRow label="1年後診断" url={yearLaterUrl} onCopy={copy} />
+          <div className="text-[11px] text-slate-500 leading-relaxed">
+            ※ このリンクを社員本人に共有してください。社員はブラウザでリンクを開き、診断を完了すると
+            この社員の診断履歴に自動で追加されます。プロフィールはこのページの情報がプリフィルされます。
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function DiagLinkRow({
+  label,
+  url,
+  onCopy,
+}: {
+  label: string;
+  url: string;
+  onCopy: (s: string) => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-bold text-slate-700 w-20 shrink-0">{label}:</span>
+      <input
+        readOnly
+        value={url}
+        className="flex-1 border border-slate-200 rounded px-2 py-1 text-xs bg-white font-mono"
+        onFocus={(e) => e.target.select()}
+      />
+      <button
+        onClick={() => {
+          onCopy(url);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+        className="text-xs px-2 py-1 rounded border border-slate-300 bg-white hover:bg-slate-50 shrink-0"
+      >
+        {copied ? "✓ コピー済" : "コピー"}
+      </button>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-xs px-2 py-1 rounded border border-emerald-300 bg-white hover:bg-emerald-50 text-emerald-700 shrink-0"
+      >
+        開く ↗
+      </a>
+    </div>
+  );
+}
+
 function OverviewSection({ employee }: { employee: Employee }) {
   const latest = employee.diagnoses[employee.diagnoses.length - 1];
   const dom = dominantAxis(latest.scores);
   return (
     <div className="space-y-5">
+      <DiagnoseActions employee={employee} />
       <section className="grid gap-6 md:grid-cols-2">
         <div className="bg-white border border-quad-line rounded p-5">
           <h2 className="text-sm tracking-widest text-gray-500 mb-3">最新スコア (RADAR)</h2>
@@ -401,7 +492,7 @@ function OverviewSection({ employee }: { employee: Employee }) {
             <div className="text-lg font-bold">{dom} ── {AXIS_LABEL_JA[dom]}</div>
           </div>
           <div className="bg-white border border-quad-line rounded p-4">
-            <div className="text-xs tracking-widest text-gray-500 mb-1">診断履歴</div>
+            <div className="text-xs tracking-widest text-gray-500 mb-1">診断履歴 ({employee.diagnoses.length}回)</div>
             <ul className="text-sm space-y-1">
               {employee.diagnoses.map((d, i) => (
                 <li key={i}>

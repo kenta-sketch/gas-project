@@ -6,13 +6,15 @@ import Link from "next/link";
 import { QUESTION_SECTIONS, EMOTION_QUESTIONS, FZ_QUESTIONS } from "@/lib/questions";
 import { computeFullDiagnosis } from "@/lib/scoring";
 import { EMOTION_LABEL_JA } from "@/lib/types";
-import type { EmotionScores, LikertValue, DiagnosticAnswers, StandaloneDiagnosis } from "@/lib/types";
+import type { EmotionScores, LikertValue, DiagnosticAnswers, Diagnosis, StandaloneDiagnosis } from "@/lib/types";
 import {
   newStandaloneDiagnosisId,
   upsertStandaloneDiagnosis,
   loadStandaloneDraft,
   saveStandaloneDraft,
   clearStandaloneDraft,
+  findEmployeeMerged,
+  upsertEmployee,
 } from "@/lib/store";
 
 type Step = "profile" | "diagnostic" | "emotions";
@@ -62,6 +64,15 @@ function DiagnoseStandaloneInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const previousId = searchParams.get("previousId") ?? undefined;
+  const employeeId = searchParams.get("employeeId") ?? undefined;
+  const scenarioParam = searchParams.get("scenario") ?? undefined;
+
+  // employeeId が指定されている場合、社員プロフィールでプリフィルする
+  const linkedEmployee = useMemo(() => {
+    if (!employeeId) return null;
+    if (typeof window === "undefined") return null;
+    return findEmployeeMerged(employeeId) ?? null;
+  }, [employeeId]);
 
   const [initialDraft] = useState<DiagnoseDraft | null>(() => loadStandaloneDraft<DiagnoseDraft>());
   const [draftRestored] = useState(() => initialDraft !== null);
@@ -70,11 +81,15 @@ function DiagnoseStandaloneInner() {
   const [step, setStep] = useState<Step>(initialDraft?.step ?? "profile");
   const [diagSectionIdx, setDiagSectionIdx] = useState(initialDraft?.diagSectionIdx ?? 0);
 
-  const [fullName, setFullName] = useState(initialDraft?.fullName ?? "");
-  const [ageRange, setAgeRange] = useState(initialDraft?.ageRange ?? "20代後半");
-  const [gender, setGender] = useState<"男性" | "女性" | "その他">(initialDraft?.gender ?? "男性");
+  const [fullName, setFullName] = useState(initialDraft?.fullName ?? linkedEmployee?.fullName ?? "");
+  const [ageRange, setAgeRange] = useState(initialDraft?.ageRange ?? linkedEmployee?.ageRange ?? "20代後半");
+  const [gender, setGender] = useState<"男性" | "女性" | "その他">(
+    initialDraft?.gender ?? linkedEmployee?.gender ?? "男性",
+  );
   const [email, setEmail] = useState(initialDraft?.email ?? "");
-  const [optionalContext, setOptionalContext] = useState(initialDraft?.optionalContext ?? "");
+  const [optionalContext, setOptionalContext] = useState(
+    initialDraft?.optionalContext ?? (linkedEmployee?.currentRole ? `現職: ${linkedEmployee.currentRole}` : ""),
+  );
 
   const [answers, setAnswers] = useState<DiagnosticAnswers>(
     initialDraft?.answers ?? {
@@ -208,6 +223,8 @@ function DiagnoseStandaloneInner() {
   function submit() {
     const result = computeFullDiagnosis(answers, emotions, responseTimings);
     const today = new Date().toISOString().slice(0, 10);
+
+    // 常にスタンドアロン診断として保存(共有可能な結果ページ用)
     const diagnosis: StandaloneDiagnosis = {
       id: diagnosisId,
       date: today,
@@ -225,6 +242,36 @@ function DiagnoseStandaloneInner() {
       previousId,
     };
     upsertStandaloneDiagnosis(diagnosis);
+
+    // employeeId が指定されている場合、社員レコードにも追加
+    if (employeeId) {
+      const employee = findEmployeeMerged(employeeId);
+      if (employee) {
+        const allowedScenarios = ["応募時", "採用時", "1年後", "再診断"] as const;
+        type ScenarioType = (typeof allowedScenarios)[number];
+        const scenario: ScenarioType = allowedScenarios.includes(scenarioParam as ScenarioType)
+          ? (scenarioParam as ScenarioType)
+          : "再診断";
+        const newEmployeeDiagnosis: Diagnosis = {
+          date: today,
+          scenario,
+          questionSetVersion: "v1.0",
+          answers,
+          scores: result.scores,
+          emotions,
+          type: result.primaryType,
+          result,
+        };
+        upsertEmployee({
+          ...employee,
+          diagnoses: [...employee.diagnoses, newEmployeeDiagnosis],
+        });
+        clearStandaloneDraft();
+        router.push(`/admin/manage/${employeeId}?fromDiagnose=${diagnosisId}`);
+        return;
+      }
+    }
+
     clearStandaloneDraft();
     router.push(`/diagnose/result/${diagnosisId}`);
   }
@@ -238,11 +285,25 @@ function DiagnoseStandaloneInner() {
   return (
     <div className="space-y-8 max-w-3xl mx-auto">
       <header className="border-b border-slate-200 pb-3">
-        <div className="text-xs tracking-widest text-slate-500">QUAD MIND DIAGNOSE · スタンドアロン診断</div>
-        <h1 className="text-2xl font-bold">セルフ診断</h1>
+        <div className="text-xs tracking-widest text-slate-500">
+          {linkedEmployee ? "QUAD MIND DIAGNOSE · 社員診断" : "QUAD MIND DIAGNOSE · セルフ診断"}
+        </div>
+        <h1 className="text-2xl font-bold">
+          {linkedEmployee ? `${linkedEmployee.fullName} さんの ${scenarioParam ?? "再"}診断` : "セルフ診断"}
+        </h1>
+        {linkedEmployee && (
+          <p className="text-xs text-emerald-700 mt-1">
+            🔗 社員レコード「{linkedEmployee.fullName}」に紐付いた診断です。送信後この社員の診断履歴に追加されます。
+          </p>
+        )}
         <p className="text-sm text-slate-600 mt-1">
           所要時間 約15-20分。プロフィール → 75問(5セクション)→ 5感情 で完了します。
-          応募や採用とは独立しており、自分の状態を把握する目的で何度でも受け直し可能です。
+          {!linkedEmployee && (
+            <>
+              <br />
+              応募や採用とは独立しており、自分の状態を把握する目的で何度でも受け直し可能です。
+            </>
+          )}
         </p>
         <p className="text-xs text-emerald-700 mt-1 inline-flex items-center gap-1">
           <span>💾</span>

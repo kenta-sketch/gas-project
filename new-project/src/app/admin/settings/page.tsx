@@ -3,7 +3,23 @@
 import { useEffect, useState } from "react";
 import { loadSettings, saveSettings } from "@/lib/store";
 import { DEFAULT_SETTINGS } from "@/data/settings";
-import type { Settings, StageId } from "@/lib/types";
+import type { AxisKey, CompanyProfile, Settings, StageId } from "@/lib/types";
+import { AXIS_LABEL_JA } from "@/lib/types";
+
+const QUALITY_OPTIONS = [
+  "熱意",
+  "コミュニケーション能力",
+  "論理的思考",
+  "突破力",
+  "共感力",
+  "持続性",
+  "創造性",
+  "規範意識",
+  "経験圧縮による直感",
+  "場の空気を読む力",
+  "リスク管理",
+  "場の心理的安全性を作る力",
+];
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
@@ -19,6 +35,31 @@ export default function SettingsPage() {
 
   function updateLabel(stage: StageId, label: string) {
     setSettings((s) => ({ ...s, stageLabels: { ...s.stageLabels, [stage]: label } }));
+  }
+
+  function updateCompany<K extends keyof CompanyProfile>(key: K, value: CompanyProfile[K]) {
+    setSettings((s) => ({
+      ...s,
+      company: { ...(s.company ?? {}), [key]: value },
+    }));
+  }
+
+  function updateAxisBalance(axis: AxisKey, value: number) {
+    setSettings((s) => ({
+      ...s,
+      company: {
+        ...(s.company ?? {}),
+        axisBalance: { ...(s.company?.axisBalance ?? {}), [axis]: value },
+      },
+    }));
+  }
+
+  function toggleQuality(q: string) {
+    setSettings((s) => {
+      const current = s.company?.emphasizedQualities ?? [];
+      const next = current.includes(q) ? current.filter((x) => x !== q) : [...current, q];
+      return { ...s, company: { ...(s.company ?? {}), emphasizedQualities: next } };
+    });
   }
 
   function save() {
@@ -96,6 +137,112 @@ export default function SettingsPage() {
         <div className="text-xs text-gray-500 mt-2">
           選考段数の追加/削除は本番版で対応(現在のデモは applied / 1次 / 2次 / 最終 / hired / rejected の6段固定)。
         </div>
+      </section>
+
+      <section className="bg-gradient-to-br from-brand-50/30 to-white border border-brand-200 rounded-lg p-6 space-y-4">
+        <div>
+          <h2 className="font-bold">会社プロファイル(AI個別分析で参照)</h2>
+          <p className="text-sm text-slate-600 mt-1">
+            理念・求める人物像・4軸の理想バランス・重視する性質を設定すると、AI個別分析が
+            「この応募者は当社の方向性とどう合うか」を踏まえて出力されます。
+            未設定の場合は会社文脈なしで分析されます。
+          </p>
+        </div>
+
+        <label className="block">
+          <div className="text-xs tracking-widest text-slate-500 mb-1">会社名(任意)</div>
+          <input
+            type="text"
+            value={settings.company?.companyName ?? ""}
+            onChange={(e) => updateCompany("companyName", e.target.value)}
+            className="w-full border border-slate-200 rounded px-3 py-2 text-sm"
+            placeholder="例: 株式会社サンプル"
+          />
+        </label>
+
+        <label className="block">
+          <div className="text-xs tracking-widest text-slate-500 mb-1">理念・ミッション</div>
+          <textarea
+            value={settings.company?.philosophy ?? ""}
+            onChange={(e) => updateCompany("philosophy", e.target.value)}
+            rows={3}
+            className="w-full border border-slate-200 rounded px-3 py-2 text-sm"
+            placeholder="例: 顧客の課題を構造で解決し、現場発の革新を支える"
+          />
+        </label>
+
+        <label className="block">
+          <div className="text-xs tracking-widest text-slate-500 mb-1">求める人物像</div>
+          <textarea
+            value={settings.company?.idealCandidate ?? ""}
+            onChange={(e) => updateCompany("idealCandidate", e.target.value)}
+            rows={3}
+            className="w-full border border-slate-200 rounded px-3 py-2 text-sm"
+            placeholder="例: 自走できる、相手の感情を読みつつ論理で説明できる、長期視点を持てる"
+          />
+        </label>
+
+        <div>
+          <div className="text-xs tracking-widest text-slate-500 mb-2">4軸の理想バランス(各 0〜5、重視度)</div>
+          <div className="grid sm:grid-cols-2 gap-3">
+            {(["A", "B", "C", "D"] as AxisKey[]).map((k) => {
+              const val = settings.company?.axisBalance?.[k] ?? 0;
+              return (
+                <div key={k} className="bg-white border border-slate-200 rounded p-3">
+                  <div className="flex items-baseline justify-between mb-1">
+                    <span className="font-bold text-sm">
+                      {k} <span className="text-slate-500 font-normal text-xs">({AXIS_LABEL_JA[k]})</span>
+                    </span>
+                    <span className="font-mono text-sm">{val}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={5}
+                    step={1}
+                    value={val}
+                    onChange={(e) => updateAxisBalance(k, Number(e.target.value))}
+                    className="w-full"
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="text-xs tracking-widest text-slate-500 mb-2">重視する性質(複数選択可)</div>
+          <div className="flex flex-wrap gap-1.5">
+            {QUALITY_OPTIONS.map((q) => {
+              const sel = settings.company?.emphasizedQualities?.includes(q) ?? false;
+              return (
+                <button
+                  key={q}
+                  onClick={() => toggleQuality(q)}
+                  className={
+                    "text-xs px-3 py-1.5 rounded-full border transition-colors " +
+                    (sel
+                      ? "bg-brand-500 text-white border-brand-500"
+                      : "bg-white border-slate-300 hover:bg-slate-50 text-slate-700")
+                  }
+                >
+                  {q}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <label className="block">
+          <div className="text-xs tracking-widest text-slate-500 mb-1">追加コンテキスト(業種・規模・社風など)</div>
+          <textarea
+            value={settings.company?.context ?? ""}
+            onChange={(e) => updateCompany("context", e.target.value)}
+            rows={2}
+            className="w-full border border-slate-200 rounded px-3 py-2 text-sm"
+            placeholder="例: BtoB SaaS / 50名規模 / リモート併用 / 経営層と現場の距離が近い"
+          />
+        </label>
       </section>
 
       <div className="flex gap-3">

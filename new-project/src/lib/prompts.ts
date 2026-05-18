@@ -419,6 +419,18 @@ export interface PersonalInsightInput {
     workHistory?: string;
     selfPR?: string;
   };
+  /**
+   * 会社プロファイル(任意)。あれば適性判定をプロンプトに織り込む。
+   * /admin/settings の company から渡される。
+   */
+  company?: {
+    companyName?: string;
+    philosophy?: string;
+    idealCandidate?: string;
+    axisBalance?: { A?: number; B?: number; C?: number; D?: number };
+    emphasizedQualities?: string[];
+    context?: string;
+  };
   aSeparation?: {
     internal: number;
     external: number;
@@ -532,6 +544,33 @@ export function personalInsightUser(input: PersonalInsightInput): string {
     lines.push("");
     lines.push(`【経歴情報】 未提出`);
   }
+
+  // 会社プロファイル(設定されていれば適性判定の文脈として使う)
+  if (input.company) {
+    const c = input.company;
+    const hasContent = c.philosophy || c.idealCandidate || (c.axisBalance && Object.keys(c.axisBalance).length > 0) || (c.emphasizedQualities && c.emphasizedQualities.length > 0) || c.context;
+    if (hasContent) {
+      lines.push("");
+      lines.push(`【会社プロファイル(適性判定の文脈)】`);
+      if (c.companyName) lines.push(`会社名: ${c.companyName}`);
+      if (c.philosophy) lines.push(`■ 理念/ミッション\n${c.philosophy}`);
+      if (c.idealCandidate) lines.push(`■ 求める人物像\n${c.idealCandidate}`);
+      if (c.axisBalance) {
+        const balanceStr = (["A", "B", "C", "D"] as const)
+          .map((k) => `${k}=${c.axisBalance![k] ?? 0}`)
+          .join(" / ");
+        lines.push(`■ 4軸の理想バランス(0-5)  ${balanceStr}`);
+      }
+      if (c.emphasizedQualities && c.emphasizedQualities.length > 0) {
+        lines.push(`■ 重視する性質: ${c.emphasizedQualities.join(" / ")}`);
+      }
+      if (c.context) lines.push(`■ 追加コンテキスト: ${c.context}`);
+      lines.push("");
+      lines.push(`★ 上記の会社プロファイルを踏まえ、bestFitRoles / managementHint に「この会社・この職務での具体的な適合度・配置案」を必ず含めること。`);
+      lines.push(`★ 4軸の理想バランスと応募者の Axis Score の乖離を summary または cautions で言及すること。`);
+    }
+  }
+
   lines.push("");
   lines.push(`以上の情報を統合し、${input.profile.fullName} 個人専用の分析を上記の JSON 形式で出力してください。`);
   lines.push(`必ず JSON のみを出力し、それ以外のテキスト・コードブロック・コメントは一切含めないこと。`);

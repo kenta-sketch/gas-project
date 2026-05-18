@@ -305,6 +305,7 @@ function PersonalInsightSection({
     setError(null);
     setGenerating(true);
     try {
+      const settings = loadSettings();
       const body = {
         type: diagnosis.type,
         scores: diagnosis.scores,
@@ -315,6 +316,7 @@ function PersonalInsightSection({
           gender: applicant.profile.gender,
           appliedPosition: applicant.profile.appliedPosition,
         },
+        company: settings.company,
         career: applicant.careerAnswers
           ? {
               education: applicant.careerAnswers.education,

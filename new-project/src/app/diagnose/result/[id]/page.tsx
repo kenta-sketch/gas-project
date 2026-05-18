@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { findStandaloneDiagnosis, upsertStandaloneDiagnosis } from "@/lib/store";
+import { findStandaloneDiagnosis, loadSettings, upsertStandaloneDiagnosis } from "@/lib/store";
 import { dominantAxis } from "@/lib/scoring";
 import { QuadRadar } from "@/components/RadarChart";
 import { EmotionBars } from "@/components/EmotionBars";
@@ -157,6 +157,7 @@ function PersonalInsightSection({
     setError(null);
     setGenerating(true);
     try {
+      const settings = loadSettings();
       const body = {
         type: diagnosis.type,
         scores: diagnosis.scores,
@@ -167,6 +168,7 @@ function PersonalInsightSection({
           gender: diagnosis.profile.gender,
           appliedPosition: diagnosis.profile.optionalContext ?? "(セルフ診断)",
         },
+        company: settings.company,
         aSeparation: diagnosis.result?.aSeparation
           ? {
               internal: diagnosis.result.aSeparation.internal,

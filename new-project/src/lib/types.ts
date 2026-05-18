@@ -327,10 +327,33 @@ export type StageId =
   | "hired"
   | "rejected";
 
+// ============================================================
+// 会社プロファイル(AI個別分析の適性判定で使用)
+// ============================================================
+export interface CompanyProfile {
+  /** 会社名 */
+  companyName?: string;
+  /** 理念・ミッション(自由記述) */
+  philosophy?: string;
+  /** 求める人物像(自由記述) */
+  idealCandidate?: string;
+  /**
+   * 4軸の理想バランス(各 0-5)
+   * 例: 営業会社 → A=5, B=3, C=4, D=2(感情・直感重視、規範低め)
+   */
+  axisBalance?: Partial<AxisScores>;
+  /** 重視する性質(チェックボックス的) */
+  emphasizedQualities?: string[];
+  /** 業種・規模など追加コンテキスト */
+  context?: string;
+}
+
 export interface Settings {
   inputMode: "questions" | "resume" | "both";
   stageLabels: Record<StageId, string>;
   stageOrder: StageId[];
+  /** 会社プロファイル(任意・AI個別分析で参照) */
+  company?: CompanyProfile;
 }
 
 // ============================================================

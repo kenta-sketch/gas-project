@@ -67,8 +67,8 @@ export default function HomePage() {
         <SubCard
           tag="セルフ診断"
           title="診断だけ受ける"
-          desc="応募とは独立。自分の状態を把握するため何度でも受け直し可能。結果はブラウザに保存。"
-          link={{ href: "/diagnose", label: "セルフ診断を始める →" }}
+          desc="応募とは独立。自分の状態を把握するため何度でも受け直し可能。履歴と再診断はセルフポータルから。"
+          link={{ href: "/self", label: "セルフポータルを開く →" }}
           accentClass="border-l-quad-a"
         />
         <SubCard

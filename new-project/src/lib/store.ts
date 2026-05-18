@@ -128,11 +128,50 @@ export function newApplicantId(): string {
 }
 
 // ============================================================
-// 1on1 記録(localStorage 追加分)
+// 社員マスター(seed + localStorage 上書き分)
+// 社員データは原則 seed だが、診断追加・レポートキャッシュ等で
+// 編集が必要なため、localStorage に上書き分を保存しマージする
 // ============================================================
+import type { Employee, OneOnOne } from "./types";
+import { EMPLOYEES_SEED, ONE_ON_ONES_SEED } from "@/data/employees";
 
-import type { OneOnOne } from "./types";
-import { ONE_ON_ONES_SEED } from "@/data/employees";
+const EMPLOYEES_LS_KEY = "qm-demo-employee-overrides";
+
+function readEmployeeOverrides(): Record<string, Employee> {
+  if (typeof window === "undefined") return {};
+  const raw = window.localStorage.getItem(EMPLOYEES_LS_KEY);
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as Record<string, Employee>;
+  } catch {
+    return {};
+  }
+}
+
+function writeEmployeeOverrides(overrides: Record<string, Employee>) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(EMPLOYEES_LS_KEY, JSON.stringify(overrides));
+  } catch {
+    // localStorage 容量超過などは黙って続行
+  }
+}
+
+export function listEmployees(): Employee[] {
+  // seed をベースに、override で上書き(同 id があれば override 優先)
+  const overrides = readEmployeeOverrides();
+  return EMPLOYEES_SEED.map((e) => overrides[e.id] ?? e);
+}
+
+export function findEmployeeMerged(id: string): Employee | undefined {
+  return listEmployees().find((e) => e.id === id);
+}
+
+export function upsertEmployee(employee: Employee) {
+  const overrides = readEmployeeOverrides();
+  overrides[employee.id] = employee;
+  writeEmployeeOverrides(overrides);
+}
 
 const ONEONONE_LS_KEY = "qm-demo-one-on-ones";
 

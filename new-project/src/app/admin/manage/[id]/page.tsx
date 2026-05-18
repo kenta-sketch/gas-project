@@ -3,7 +3,7 @@
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { findEmployee } from "@/data/employees";
+import { findEmployeeMerged as findEmployee, upsertEmployee } from "@/lib/store";
 import { dominantAxis } from "@/lib/scoring";
 import { QuadRadar } from "@/components/RadarChart";
 import { ScoreTable } from "@/components/ScoreTable";
@@ -23,10 +23,12 @@ export default function EmployeeDetailPage({
   const { id } = use(params);
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
+  const [refreshKey, setRefreshKey] = useState(0);
+  const refresh = () => setRefreshKey((k) => k + 1);
 
   useEffect(() => {
     setEmployee(findEmployee(id) ?? null);
-  }, [id]);
+  }, [id, refreshKey]);
 
   if (!employee) {
     return (
@@ -112,6 +114,7 @@ export default function EmployeeDetailPage({
           gender={employee.gender}
           position={employee.currentRole}
           scoresKey={latest.date}
+          onCacheUpdate={refresh}
         />
       )}
       {tab === "manager" && latest && (
@@ -122,10 +125,11 @@ export default function EmployeeDetailPage({
           gender={employee.gender}
           position={employee.currentRole}
           scoresKey={latest.date}
+          onCacheUpdate={refresh}
         />
       )}
       {tab === "compare" && t1 && t2 && (
-        <CompareSection employee={employee} />
+        <CompareSection employee={employee} onCacheUpdate={refresh} />
       )}
       {tab === "compare" && (!t1 || !t2) && (
         <div className="bg-amber-50 border border-amber-200 rounded p-4 text-sm">
@@ -435,6 +439,7 @@ function ReportSection({
   gender,
   position,
   scoresKey,
+  onCacheUpdate,
 }: {
   kind: "self" | "manager";
   employee: Employee;
@@ -442,51 +447,80 @@ function ReportSection({
   gender: string;
   position: string;
   scoresKey: string;
+  onCacheUpdate: () => void;
 }) {
-  const [text, setText] = useState("");
+  const latestIdx = employee.diagnoses.length - 1;
+  const latest = employee.diagnoses[latestIdx];
+  const cached = latest?.reports?.[kind];
+  const [text, setText] = useState<string>(cached?.text ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const requested = useRef(false);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(cached?.generatedAt ?? null);
 
+  async function generate(force = false) {
+    if (loading) return;
+    if (!force && text) return; // 既にあれば再生成しない
+    setError(null);
+    setLoading(true);
+    setText("");
+    try {
+      const res = await fetch("/api/report", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          kind,
+          ageRange,
+          gender,
+          position,
+          scores: latest.scores,
+          emotions: latest.emotions,
+        }),
+      });
+      if (!res.ok) {
+        setError(`APIエラー (${res.status}): ${(await res.text()).slice(0, 200)}`);
+        return;
+      }
+      const reader = res.body?.getReader();
+      if (!reader) return;
+      const decoder = new TextDecoder();
+      let acc = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        setText(acc);
+      }
+      // ストリーミング完了したらキャッシュに保存
+      const nowIso = new Date().toISOString();
+      const updatedDiagnoses = employee.diagnoses.map((d, i) =>
+        i === latestIdx
+          ? {
+              ...d,
+              reports: {
+                ...(d.reports ?? {}),
+                [kind]: { text: acc, generatedAt: nowIso },
+              },
+            }
+          : d,
+      );
+      upsertEmployee({ ...employee, diagnoses: updatedDiagnoses });
+      setGeneratedAt(nowIso);
+      onCacheUpdate();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // キャッシュ無いときだけ初回自動生成
+  const requested = useRef(false);
   useEffect(() => {
     if (requested.current) return;
     requested.current = true;
-    const latest = employee.diagnoses[employee.diagnoses.length - 1];
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await fetch("/api/report", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            kind,
-            ageRange,
-            gender,
-            position,
-            scores: latest.scores,
-            emotions: latest.emotions,
-          }),
-        });
-        if (!res.ok) {
-          setError(`APIエラー (${res.status}): ${(await res.text()).slice(0, 200)}`);
-          return;
-        }
-        const reader = res.body?.getReader();
-        if (!reader) return;
-        const decoder = new TextDecoder();
-        let acc = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          acc += decoder.decode(value, { stream: true });
-          setText(acc);
-        }
-      } catch (e) {
-        setError((e as Error).message);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    if (!cached) {
+      void generate(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kind, scoresKey]);
 
@@ -498,6 +532,29 @@ function ReportSection({
           <div className="mt-1 text-xs text-red-600">.env.local の ANTHROPIC_API_KEY を確認してください。</div>
         </div>
       )}
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs text-slate-500">
+          {generatedAt ? (
+            <>✓ 保存済み(生成: {new Date(generatedAt).toLocaleString("ja-JP")})</>
+          ) : loading ? (
+            "生成中..."
+          ) : (
+            "未生成"
+          )}
+        </div>
+        <button
+          onClick={() => generate(true)}
+          disabled={loading}
+          className={
+            "text-xs px-3 py-1 rounded border transition-colors " +
+            (loading
+              ? "bg-slate-100 text-slate-400 border-slate-200"
+              : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50")
+          }
+        >
+          {loading ? "生成中..." : text ? "再生成" : "生成する"}
+        </button>
+      </div>
       <article className="bg-white border border-quad-line rounded-lg p-6 min-h-[400px]">
         {!text && loading && (
           <div className="text-gray-500 text-sm">
@@ -519,57 +576,74 @@ function ReportSection({
 // ──────────────────────────────────────────
 // 1年後比較
 // ──────────────────────────────────────────
-function CompareSection({ employee }: { employee: Employee }) {
+function CompareSection({ employee, onCacheUpdate }: { employee: Employee; onCacheUpdate: () => void }) {
   const t1 = employee.diagnoses.find((d) => d.scenario === "採用時")!;
   const t2 = employee.diagnoses.find((d) => d.scenario === "1年後")!;
-  const [text, setText] = useState("");
+  const cached = employee.compareReport;
+  const [text, setText] = useState<string>(cached?.text ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const requested = useRef(false);
+  const [generatedAt, setGeneratedAt] = useState<string | null>(cached?.generatedAt ?? null);
 
+  async function generate(force = false) {
+    if (loading) return;
+    if (!force && text) return;
+    setError(null);
+    setLoading(true);
+    setText("");
+    try {
+      const res = await fetch("/api/compare", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: employee.fullName,
+          ageRange: employee.ageRange,
+          gender: employee.gender,
+          roleAtHire: employee.currentRole,
+          currentRole: employee.currentRole + "(1年経過)",
+          scoresT1: t1.scores,
+          scoresT2: t2.scores,
+          typeT1: t1.type,
+          typeT2: t2.type,
+          dateT1: t1.date,
+          dateT2: t2.date,
+        }),
+      });
+      if (!res.ok) {
+        setError(`APIエラー (${res.status}): ${(await res.text()).slice(0, 200)}`);
+        return;
+      }
+      const reader = res.body?.getReader();
+      if (!reader) return;
+      const decoder = new TextDecoder();
+      let acc = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value, { stream: true });
+        setText(acc);
+      }
+      const nowIso = new Date().toISOString();
+      upsertEmployee({
+        ...employee,
+        compareReport: { text: acc, generatedAt: nowIso },
+      });
+      setGeneratedAt(nowIso);
+      onCacheUpdate();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const requested = useRef(false);
   useEffect(() => {
     if (requested.current) return;
     requested.current = true;
-    (async () => {
-      setLoading(true);
-      try {
-        const res = await fetch("/api/compare", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            name: employee.fullName,
-            ageRange: employee.ageRange,
-            gender: employee.gender,
-            roleAtHire: employee.currentRole,
-            currentRole: employee.currentRole + "(1年経過)",
-            scoresT1: t1.scores,
-            scoresT2: t2.scores,
-            typeT1: t1.type,
-            typeT2: t2.type,
-            dateT1: t1.date,
-            dateT2: t2.date,
-          }),
-        });
-        if (!res.ok) {
-          setError(`APIエラー (${res.status}): ${(await res.text()).slice(0, 200)}`);
-          return;
-        }
-        const reader = res.body?.getReader();
-        if (!reader) return;
-        const decoder = new TextDecoder();
-        let acc = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          acc += decoder.decode(value, { stream: true });
-          setText(acc);
-        }
-      } catch (e) {
-        setError((e as Error).message);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    if (!cached) {
+      void generate(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -607,7 +681,26 @@ function CompareSection({ employee }: { employee: Employee }) {
         </div>
       </section>
       <section>
-        <h2 className="font-bold mb-3">変化の解釈と配置最適化提案</h2>
+        <div className="flex items-baseline justify-between mb-2">
+          <h2 className="font-bold">変化の解釈と配置最適化提案</h2>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-500">
+              {generatedAt ? `✓ 保存済み(${new Date(generatedAt).toLocaleString("ja-JP")})` : loading ? "生成中..." : "未生成"}
+            </span>
+            <button
+              onClick={() => generate(true)}
+              disabled={loading}
+              className={
+                "text-xs px-3 py-1 rounded border transition-colors " +
+                (loading
+                  ? "bg-slate-100 text-slate-400 border-slate-200"
+                  : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50")
+              }
+            >
+              {loading ? "生成中..." : text ? "再生成" : "生成する"}
+            </button>
+          </div>
+        </div>
         {error && (
           <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-800 mb-3">
             {error}

@@ -201,6 +201,17 @@ export interface ResponseTimings {
 }
 
 // ============================================================
+// AI生成テキストレポートのキャッシュ
+// 自己分析レポート / マネジメントガイド / 1年後比較レポートなど、
+// 一度生成したらキャッシュして再生成しない
+// ============================================================
+export interface CachedReport {
+  text: string;
+  generatedAt: string; // ISO timestamp
+  modelVersion?: string;
+}
+
+// ============================================================
 // AI個別分析:診断結果 × 経歴 × 第2層変数 から生成された個別の分析文
 // TYPE_DESCRIPTIONS(静的テンプレ)と同じ shape だが、内容は個別化される
 // ============================================================
@@ -308,6 +319,11 @@ export interface InterviewRound {
 export interface Diagnosis {
   date: string;
   scenario: "応募時" | "採用時" | "1年後" | "再診断";
+  /**
+   * 質問セットのバージョン。将来質問群が変わっても、過去診断のスコアと整合性を保てる。
+   * デフォルト: "v1.0" (Likert 75問体系)
+   */
+  questionSetVersion?: string;
   // 新75問体系の回答(オプション: seed データには無くてもよい)
   answers?: DiagnosticAnswers;
   scores: AxisScores;
@@ -317,6 +333,11 @@ export interface Diagnosis {
   result?: DiagnosticResult;
   /** AI 個別分析(診断結果×経歴×第2層変数 を Claude に渡して生成。一度生成したらキャッシュ) */
   personalInsight?: PersonalInsight;
+  /** AI生成テキストレポートのキャッシュ */
+  reports?: {
+    self?: CachedReport;     // 自己分析レポート
+    manager?: CachedReport;  // マネジメントガイド
+  };
 }
 
 // ============================================================
@@ -379,6 +400,8 @@ export interface Employee {
   status: "在籍" | "休職" | "退職";
   performance?: "S" | "A" | "B" | "C";
   potential?: "高" | "中" | "低";
+  /** 1年後比較レポートのキャッシュ(AI生成、再生成しない限り維持) */
+  compareReport?: CachedReport;
 }
 
 // ============================================================

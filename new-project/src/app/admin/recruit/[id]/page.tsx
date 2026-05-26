@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { findApplicant, loadSettings, setApplicantStage, upsertApplicant } from "@/lib/store";
@@ -299,6 +299,17 @@ function PersonalInsightSection({
   const insight = diagnosis?.personalInsight;
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requested = useRef(false);
+
+  // キャッシュ無いときだけ初回自動生成(ReportSection と同じパターン)
+  useEffect(() => {
+    if (requested.current) return;
+    requested.current = true;
+    if (!insight && diagnosis) {
+      void generate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diagnosis?.date, diagnosisIdx]);
 
   async function generate() {
     if (!diagnosis) return;

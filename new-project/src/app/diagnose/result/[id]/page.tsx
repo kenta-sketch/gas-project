@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { findStandaloneDiagnosis, loadSettings, upsertStandaloneDiagnosis } from "@/lib/store";
 import { dominantAxis } from "@/lib/scoring";
@@ -109,9 +109,21 @@ export default function DiagnoseResultPage({
         </div>
       </section>
 
-      <section>
-        <TypeInsight type={diagnosis.type} variant="full" />
-      </section>
+      {/* テンプレは AI個別分析が未生成のときだけフォールバック表示 */}
+      {!diagnosis.personalInsight && (
+        <section>
+          <details className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+            <summary className="cursor-pointer text-xs text-slate-500 font-semibold">
+              タイプ汎用説明(テンプレート)── AI個別分析の生成完了まで参考表示
+            </summary>
+            <div className="mt-3">
+              <TypeInsight type={diagnosis.type} variant="full" />
+            </div>
+          </details>
+        </section>
+      )}
+
+      <PersonalInsightSection diagnosis={diagnosis} onUpdate={refresh} />
 
       {diagnosis.result && (
         <section className="space-y-2">
@@ -119,8 +131,6 @@ export default function DiagnoseResultPage({
           <DiagnosticInsight result={diagnosis.result} internal={true} />
         </section>
       )}
-
-      <PersonalInsightSection diagnosis={diagnosis} onUpdate={refresh} />
 
       <footer className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm">
         <div className="font-bold text-slate-800 mb-1">この診断は何度でも受け直せます</div>
@@ -152,6 +162,17 @@ function PersonalInsightSection({
   const insight = diagnosis.personalInsight;
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const requested = useRef(false);
+
+  // 初回マウント時、AI個別分析がなければ自動生成
+  useEffect(() => {
+    if (requested.current) return;
+    requested.current = true;
+    if (!insight) {
+      void generate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diagnosis.id]);
 
   async function generate() {
     setError(null);

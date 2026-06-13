@@ -82,10 +82,10 @@ export default function HomePage() {
 
       {/* 4軸の説明 */}
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <AxisCard axis="A" title="動物的感情" desc="感受性 / 即時の反応 / 共感" tone="bg-rose-50 border-rose-200 text-rose-700" />
-        <AxisCard axis="B" title="機械的感情" desc="承認 / 羞恥 / 社会的同調" tone="bg-amber-50 border-amber-200 text-amber-700" />
-        <AxisCard axis="C" title="動物的理性" desc="直感 / 経験圧縮 / 非言語的判断" tone="bg-emerald-50 border-emerald-200 text-emerald-700" />
-        <AxisCard axis="D" title="機械的理性" desc="論理 / 分析 / 計画 / 説明" tone="bg-blue-50 border-blue-200 text-blue-700" />
+        <AxisCard axis="A" title="情熱" desc="自分の感情 / 感じる力" tone="bg-rose-50 border-rose-200 text-rose-700" />
+        <AxisCard axis="B" title="関係" desc="周りへの感情 / つながる力" tone="bg-amber-50 border-amber-200 text-amber-700" />
+        <AxisCard axis="C" title="洞察" desc="経験での判断 / 見抜く力" tone="bg-emerald-50 border-emerald-200 text-emerald-700" />
+        <AxisCard axis="D" title="論理" desc="言葉での判断 / 整理する力" tone="bg-blue-50 border-blue-200 text-blue-700" />
       </section>
     </div>
   );

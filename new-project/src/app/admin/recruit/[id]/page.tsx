@@ -394,6 +394,11 @@ function PersonalInsightSection({
               longConsideredQuestions: diagnosis.result.timings.longConsideredQuestions,
             }
           : undefined,
+        // v2.0(2026-06-13)
+        bcInsight: diagnosis.result?.bcInsight,
+        alliances: diagnosis.result?.alliances,
+        platform: diagnosis.result?.platform,
+        overObserver: diagnosis.result?.overObserver,
       };
       const res = await fetch("/api/personal-insight", {
         method: "POST",

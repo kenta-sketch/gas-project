@@ -48,17 +48,17 @@ const QUAD_MIND_DEFINITIONS = `【クアッドマインド理論の前提(用語
 人間の内的処理を、性格分類ではなく「常時並行で稼働する4つの機能エンジン」として捉える。
 問題は特定エンジンの存在ではなく、いずれかが単独で判断を支配する「単独運転状態」にある。
 
-- A: 動物的感情(Primal Emotion / 動物的×内発的)
-  → 最も正直な知性。偽れない。文化以前から存在する生命の根幹機能。行動の着火剤。
+- A: 情熱(自分の感情 / 感じる力)
+  → 自分の内側から湧く気持ちで動く。行動の着火剤。偽れない正直さ。
 
-- B: 機械的感情(Conditioned Emotion / 機械的×外発的)
-  → 社会の中で生き延びるために精巧に作り上げた社会適応システム。
+- B: 関係(周りへの感情 / つながる力)
+  → 場や周りの反応に合わせて動く。社会の中で生き延びるための適応システム。
 
-- C: 動物的理性(Primal Reason / 動物的×内発的)
-  → 経験が圧縮・自動化された、言語化以前の理性処理機能。
+- C: 洞察(経験での判断 / 見抜く力)
+  → 過去の経験の蓄積から、瞬時に「いける/危ない」が分かる予測機能。
 
-- D: 機械的理性(Conditioned Reason / 機械的×外発的)
-  → 経験・感情・直感を他者が理解できる形に変換する翻訳機能。
+- D: 論理(言葉での判断 / 整理する力)
+  → 経験・感情・直感を、他者が理解できる形に整理・翻訳する機能。
 
 各軸25点満点。5感情(不安/悲しみ/怒り/喜び/幸福)は各5点満点。
 
@@ -368,39 +368,51 @@ A: ${args.scoresT2.A}/25, B: ${args.scoresT2.B}/25, C: ${args.scoresT2.C}/25, D:
 // TYPE_DESCRIPTIONS と同じ7フィールド(headline/summary/strengths/cautions/
 // bestFitRoles/managementHint/growthDirection)を JSON で出力する。
 // ============================================
-export const PERSONAL_INSIGHT_SYSTEM = `あなたはクアッドマインド理論を理解し、診断結果と経歴情報を統合して、個人専用の分析レポートを生成する専門アシスタントです。
+export const PERSONAL_INSIGHT_SYSTEM = `あなたは「気持ちと判断のクセを4つの動き方で読み解く理論」を理解し、診断結果と経歴情報を統合して、その人個人専用の分析レポートを生成する専門アシスタントです。
+
+【背景となる4つの動き方(必ずこの呼び方で書く)】
+- 情熱(自分の感情/感じる力): 自分の内側から湧く気持ちで動く
+- 関係(周りへの感情/つながる力): 場や周りの反応に合わせて動く
+- 洞察(経験での判断/見抜く力): 過去の経験の蓄積から瞬時に判断する
+- 論理(言葉での判断/整理する力): 目的と根拠を組み立てて動く
+- 加えて「人を読む力(対人カン)」「気づきの力」「強みのペア(組み合わせクセ)」「コンディション(土台)」「考えすぎ状態」を補助指標として扱う
+
+【絶対に使わない言葉(学術用語)】
+動物的感情、機械的感情、動物的理性、機械的理性、A抑圧型、A凍結型、B由来C、ACTT、Observer、エンジン同盟、Platform層、Overdrive、過剰Observer 等の専門用語を出力に出してはいけない。
+代わりに上記の【4つの動き方】+ 一般語(感じる/つながる/見抜く/整理する/気づき/組み合わせクセ/土台 など)を使う。
 
 【目的】
-静的な「このタイプの傾向(詳細)」テンプレを置き換える、その個人専用の分析を生成する。
-同じタイプ判定(例:A抑圧型)の人でも、スコア配分・経歴・第2層変数(Response Style 等)が違えば違う文章が出る。
+画一的なタイプ説明テンプレを置き換える、その個人専用の分析を生成する。同じタイプでもスコア配分・経歴・回答のクセが違えば違う文章になる。
 
 【守るべき構造】
-出力は必ず厳密な JSON フォーマット。マークダウンや前置きは絶対に出力しない。
-以下7フィールドを全て埋める:
+出力は必ず厳密な JSON フォーマット。マークダウンや前置きは一切出力しない。以下7フィールドを全て埋める:
 
 {
-  "headline":        "30文字程度の一行サマリー(タイプ名 + 個別性を1つだけ含める)",
-  "summary":         "150〜250字の文章(スコア配分と経歴文脈を踏まえた個別解説)",
-  "strengths":       ["強み1(経歴とスコアの組合せ)", "強み2", "強み3"],
-  "cautions":        ["注意1(個別のリスク)", "注意2", "注意3"],
+  "headline":        "30文字程度の一行サマリー(その人らしさを一文で)",
+  "summary":         "150〜250字の文章(スコア配分と経歴を踏まえた個別解説)",
+  "strengths":       ["強み1(経歴とスコアの組合せから具体的に)", "強み2", "強み3"],
+  "cautions":        ["注意1(個別のリスク・盲点)", "注意2", "注意3"],
   "bestFitRoles":    ["適合役割1(経歴に合わせた具体例)", "適合役割2", "適合役割3"],
-  "managementHint":  "管理者向け 1〜2文(その個人にどう接するべきか)",
-  "growthDirection": "成長方向 1〜2文(本人がどう次のステップを踏むべきか)"
+  "managementHint":  "管理者向け 1〜2文(この人にどう接するべきか)",
+  "growthDirection": "成長方向 1〜2文(本人が次にどうすると良いか)"
 }
 
 【書き方の指針】
-- 「A抑圧型は一般にバーンアウト高リスク」のような汎用記述は禁止
-- 必ず数値(例: 内的A=14.6 vs 表出A=9.8)、Response Style(穏当/極端/中立)、経歴(具体的な職歴・自己PR)を文章に組み込む
-- 同じタイプでも「あなたは B=22.5 が突出しているので○○」のように個別根拠を入れる
-- 第2層変数の警告(Neutral 30%超など)があれば必ず触れる
-- 偽善的な賛美や過度に病理化する表現は避ける
-- 平易だが理論的に正確な日本語
+- 「情熱が強い人は感情的になりがち」のような汎用記述は禁止
+- 必ず数値(例: 内側の情熱=14.6/外に出す情熱=9.8)・回答のクセ(穏当/極端/中立)・経歴(具体的な職歴・自己PR)を文章に組み込む
+- 「あなたは関係が22.5と突出しているので○○」のように個別根拠を入れる
+- 「強みのペア」が検出されていれば、その盲点リスクに必ず触れる
+- 「考えすぎ状態」「コンディション低下」「対人カンの歪み」フラグがあれば必ず触れる
+- 中立(3)選択率が高ければ「質問に乗り切れていない可能性」も触れる
+- 偽善的な賛美・過度な病理化は避ける
+- 一般会社員にも伝わる平易な日本語(専門用語ゼロ)
 
 【絶対NG】
 - JSON 以外の出力(コードブロック、説明文、コメント)
 - 一般論だけで個人固有の数値・経歴を引用しない
-- 「あなたは典型的な〜です」のような没個性な書き出し
-- 評価判定(良い/悪い)。あくまで構造解釈
+- 「あなたは典型的な〜タイプです」のような没個性な書き出し
+- 評価判定(良い/悪い)。あくまで構造の解釈
+- 学術用語(動物的感情 等)の使用
 
 JSON 以外を出力した場合、システムが解釈不能になりプロダクトが壊れる。必ず JSON のみ。`;
 
@@ -470,6 +482,30 @@ export interface PersonalInsightInput {
     speedProfile: string;
     longConsideredQuestions: string[];
   };
+  // ─ v2.0 新規(2026-06-13) ─
+  /** 人を読む力(対人カン) */
+  bcInsight?: {
+    score: number;        // 0-25
+    distortion: number;   // 1-5(高いと歪み)
+    status: string;       // healthy / distorted / low
+  };
+  /** 強みのペア・組み合わせクセ */
+  alliances?: {
+    flags: { label: string; strength: number; level: string }[];
+    hasStrongPair: boolean;
+  };
+  /** コンディション(土台) */
+  platform?: {
+    score: number;        // 0-10
+    status: string;       // good / warn / low
+    note: string;
+  };
+  /** 考えすぎ状態(過剰Observer) */
+  overObserver?: {
+    level: number;        // 1-5
+    flag: boolean;
+    note: string;
+  };
 }
 
 export function personalInsightUser(input: PersonalInsightInput): string {
@@ -477,40 +513,59 @@ export function personalInsightUser(input: PersonalInsightInput): string {
   lines.push(`【対象者】`);
   lines.push(`氏名: ${input.profile.fullName}`);
   lines.push(`年代/性別: ${input.profile.ageRange} ${input.profile.gender}`);
-  lines.push(`応募職種: ${input.profile.appliedPosition}`);
+  lines.push(`職種・文脈: ${input.profile.appliedPosition}`);
   lines.push("");
-  lines.push(`【タイプ判定】 ${input.type}`);
+  lines.push(`【4つの動き方スコア(各 0-25)】`);
+  lines.push(`  情熱(自分の感情/感じる力): ${input.scores.A}`);
+  lines.push(`  関係(周りへの感情/つながる力): ${input.scores.B}`);
+  lines.push(`  洞察(経験での判断/見抜く力): ${input.scores.C}`);
+  lines.push(`  論理(言葉での判断/整理する力): ${input.scores.D}`);
   lines.push("");
-  lines.push(`【A/B/C/D スコア(各 0-25)】`);
-  for (const k of ["A", "B", "C", "D"] as AxisKey[]) {
-    lines.push(`  ${k}(${AXIS_LABEL_JA[k]}): ${input.scores[k]}`);
-  }
-  lines.push("");
-  lines.push(`【5感情(各 1-5)】`);
+  lines.push(`【5つの感情(現在の状態・各 1-5)】`);
   for (const k of ["fear", "sadness", "anger", "joy", "happiness"] as const) {
     lines.push(`  ${EMOTION_LABEL_JA[k]}: ${input.emotions[k]}`);
   }
   if (input.aSeparation) {
     lines.push("");
-    lines.push(`【G2: A発火/表出分離】`);
-    lines.push(`  内的A: ${input.aSeparation.internal} / 25`);
-    lines.push(`  表出A: ${input.aSeparation.external} / 25`);
-    lines.push(`  判定: ${input.aSeparation.classification}${input.aSeparation.frozen ? " (★凍結フラグ)" : ""}`);
+    lines.push(`【内側 vs 外側の情熱】`);
+    lines.push(`  内側で感じる強さ: ${input.aSeparation.internal} / 25`);
+    lines.push(`  外に出せる強さ:   ${input.aSeparation.external} / 25`);
+    lines.push(`  タイプ: ${input.aSeparation.classification}${input.aSeparation.frozen ? " (★凍結のサイン)" : ""}`);
   }
   if (input.integration) {
     lines.push("");
-    lines.push(`【G4: 統合状態】`);
-    lines.push(`  Observer起動: ${input.integration.observerScore} / 30`);
-    lines.push(`  切り替え自覚: ${input.integration.switchScore} / 30`);
-    lines.push(`  統合指数: ${input.integration.index.toFixed(1)} / 判定: ${input.integration.status}`);
+    lines.push(`【気づきの力】 スコア ${input.integration.observerScore}/30 / 状態: ${input.integration.status}`);
   }
-  if (input.responsibility) {
+  if (input.overObserver) {
     lines.push("");
-    lines.push(`【G3: 責任感】 主: ${input.responsibility.primary}${input.responsibility.isCompound ? ` × ${input.responsibility.secondary}(複合型)` : ""}`);
+    lines.push(`【考えすぎ状態】 強さ ${input.overObserver.level}/5${input.overObserver.flag ? " (★フラグあり)" : ""}`);
+    lines.push(`  解釈: ${input.overObserver.note}`);
+  }
+  if (input.bcInsight) {
+    lines.push("");
+    lines.push(`【人を読む力(対人カン)】 スコア ${input.bcInsight.score}/25 / 状態: ${input.bcInsight.status}`);
+    if (input.bcInsight.distortion >= 4) {
+      lines.push(`  歪み指標(対人不信): ${input.bcInsight.distortion}/5 ★高め(過去の経験が今の判断に影響している可能性)`);
+    }
+  }
+  if (input.alliances && input.alliances.flags.length > 0) {
+    lines.push("");
+    lines.push(`【強みのペア・組み合わせクセ(検出されたもの)】`);
+    for (const f of input.alliances.flags) {
+      lines.push(`  - ${f.label} : 強さ ${f.strength}/5 (${f.level})`);
+    }
+    if (input.alliances.hasStrongPair) {
+      lines.push(`  ★ 強いペアが検出されています。盲点として cautions / managementHint に必ず触れること。`);
+    }
+  }
+  if (input.platform) {
+    lines.push("");
+    lines.push(`【コンディション(土台)】 スコア ${input.platform.score}/10 / 状態: ${input.platform.status}`);
+    lines.push(`  解釈: ${input.platform.note}`);
   }
   if (input.responseStyle) {
     lines.push("");
-    lines.push(`【第2層: Response Style】`);
+    lines.push(`【回答のクセ(第2層)】`);
     lines.push(`  スタイル: ${input.responseStyle.style}`);
     lines.push(`  全回答の平均値: ${input.responseStyle.mean}`);
     lines.push(`  極端度(1か5の率): ${(input.responseStyle.extremeRatio * 100).toFixed(0)}%`);
@@ -521,17 +576,17 @@ export function personalInsightUser(input: PersonalInsightInput): string {
   }
   if (input.neutralFrequency && input.neutralFrequency.highFlag) {
     lines.push("");
-    lines.push(`【第2層: Neutral Frequency 高フラグ】 中立(3)選択率 ${(input.neutralFrequency.ratio * 100).toFixed(0)}% (>30%)`);
+    lines.push(`【中立(3)選択率が高い】 ${(input.neutralFrequency.ratio * 100).toFixed(0)}% (>30%) ── 質問に乗り切れていない可能性に触れること`);
   }
   if (input.correlationCorrection) {
     lines.push("");
-    lines.push(`【第2層: 軸間相関補正】 純粋C=${input.correlationCorrection.pureC} / 純粋D=${input.correlationCorrection.pureD} / 補正A=${input.correlationCorrection.adjustedA} / 補正B=${input.correlationCorrection.adjustedB}`);
+    lines.push(`【純粋成分推定(122人実証ベース)】 純粋洞察=${input.correlationCorrection.pureC} / 純粋論理=${input.correlationCorrection.pureD} / 補正情熱=${input.correlationCorrection.adjustedA} / 補正関係=${input.correlationCorrection.adjustedB}`);
   }
   if (input.timings) {
     lines.push("");
-    lines.push(`【第2層: 回答時間】 中央値 ${(input.timings.medianMs / 1000).toFixed(1)}秒 / プロファイル: ${input.timings.speedProfile}`);
+    lines.push(`【回答ペース】 中央値 ${(input.timings.medianMs / 1000).toFixed(1)}秒 / ${input.timings.speedProfile}`);
     if (input.timings.longConsideredQuestions.length > 0) {
-      lines.push(`  長考した質問: ${input.timings.longConsideredQuestions.join(", ")}`);
+      lines.push(`  特に時間がかかった質問: ${input.timings.longConsideredQuestions.join(", ")}`);
     }
   }
   if (input.career) {

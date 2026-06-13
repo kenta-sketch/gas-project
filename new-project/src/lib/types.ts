@@ -141,6 +141,64 @@ export interface OrgRiskDiagnosis {
 }
 
 // ============================================================
+// v2.0(2026-06-13): 強みのペア・組み合わせクセ
+// 2つの軸が結びついて他を抑圧する「同盟」を検出
+// ============================================================
+export type AllianceKind = "AL_BD" | "AL_AC" | "AL_BC" | "AL_AB";
+
+export interface AllianceFlag {
+  /** ペア識別子 */
+  kind: AllianceKind;
+  /** 一般向けラベル */
+  label: string;
+  /** 強度(1.0〜5.0、2問の平均) */
+  strength: number;
+  /** "weak" / "medium" / "strong" 3段階 */
+  level: "weak" | "medium" | "strong";
+}
+
+export interface AllianceDiagnosis {
+  flags: AllianceFlag[];
+  /** strength >= 4.0 のペアがあれば true */
+  hasStrongPair: boolean;
+}
+
+// ============================================================
+// v2.0: コンディション(身体・睡眠 = Platform層)
+// ============================================================
+export interface PlatformDiagnosis {
+  /** 睡眠・身体の総合スコア(0-10) */
+  score: number;
+  /** "good" / "warn" / "low" */
+  status: "good" | "warn" | "low";
+  /** 補足説明(1-2行) */
+  note: string;
+}
+
+// ============================================================
+// v2.0: 人を読む力(B由来C・対人カン)
+// ============================================================
+export interface BcInsightScore {
+  /** 対人カンの素点 0-25 */
+  score: number;
+  /** 「人は必ず裏切る」系の歪曲指標(BC-5、1-5) */
+  distortion: number;
+  /** "healthy" / "distorted" / "low" */
+  status: "healthy" | "distorted" | "low";
+}
+
+// ============================================================
+// v2.0: 考えすぎ状態(過剰Observer)
+// ============================================================
+export interface OverObserverDiagnosis {
+  /** OD平均(1-5) */
+  level: number;
+  /** flag: 過剰Observerの兆候 */
+  flag: boolean;
+  note: string;
+}
+
+// ============================================================
 // 第2層変数:Response Style Profile
 // 122人実証分析 (2026-05-12) から導入。Likert加点方式のバイアスを補正する
 // ============================================================
@@ -268,6 +326,15 @@ export interface DiagnosticResult {
   correlationCorrection?: AxisCorrelationCorrection;
   /** 各質問への回答時間プロファイル(任意) */
   timings?: ResponseTimings;
+  // ─ v2.0 新規(2026-06-13) ─
+  /** 人を読む力(対人カン) */
+  bcInsight?: BcInsightScore;
+  /** 強みのペア・組み合わせクセ */
+  alliances?: AllianceDiagnosis;
+  /** コンディション(身体・睡眠) */
+  platform?: PlatformDiagnosis;
+  /** 考えすぎ状態(過剰Observer) */
+  overObserver?: OverObserverDiagnosis;
 }
 
 // ============================================================
@@ -484,16 +551,26 @@ export interface Employee {
 // 質問体系
 // ============================================================
 export type QuestionCategory =
+  // v1.0 互換
   | "axis_A" | "axis_B" | "axis_C" | "axis_D"
   | "iA" | "eA" | "FZ"
   | "OB" | "SW"
   | "DR" | "BR" | "AR"
-  | "AG" | "RV" | "IM";
+  | "AG" | "RV" | "IM"
+  // v2.0 新規(2026-06-13)
+  | "axis_BC"     // 人を読む力(B由来C・対人カン)
+  | "AS"          // A抑圧判定(内側で感じてるのに出さない)
+  | "OD"          // 過剰Observer(考えすぎ状態)
+  | "AL_BD"       // 強みのペア:情熱×論理(「正しさの檻」)
+  | "AL_AC"       // 強みのペア:情熱×洞察(「天才の暴走」)
+  | "AL_BC"       // 強みのペア:関係×洞察(「空気の独裁」)
+  | "AL_AB"       // 強みのペア:情熱×関係(「承認の炎」)
+  | "PL";         // コンディション(身体・睡眠)
 
 export interface DiagnosticQuestion {
   id: string;
   text: string;
   category: QuestionCategory;
   kind: "core" | "support" | "reverse"; // 種別
-  weight: number; // 1.0 or 1.5
+  weight: number; // 1.0 or 1.5 or 2.0(★核心)
 }

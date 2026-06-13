@@ -1,134 +1,124 @@
-// クアッドマインド診断 完全仕様書 v1.0 に準拠
-// 出典: docs/theory/notes/2026-05-11-diagnostic-spec-v1.md
-// 75問体系(分岐込み): 4軸×8問=32 + G2(iA5+eA5+FZ2)=12 + G4(OB5+SW5)=10 + G3(DR/BR/AR各4)=12 + G5(AG/RV/IM各3)=9
+// QMT 50問診断 v2.0(2026-06-13)
+// 設計書: docs/theory/notes/2026-06-13-qmt-50q-design-v2.md
+// 理論底本: docs/theory/pdfs/2026-06-13-QMT-theory-v10-complete.pdf
+//
+// 47問構成:
+//   axis(26): A 5 + B 6 + C 5 + D 5 + BC 5 = 26問(コア4軸 + 人を読む力)
+//   aSeparation(4): AS-1, AS-2(A抑圧判定) + FZ-1, FZ-2(凍結判別)
+//   integration(7): OB-1〜OB-5(気づきの段階) + OD-1, OD-2(考えすぎ)
+//   responsibility(8): 強みのペア(BD, AC, BC, AB 各2問)
+//   orgRisk(2): PL-1, PL-2(コンディション)
+//
+// 言葉遣い方針: 学術用語(動物的感情/機械的理性 等)排除。一般会社員にも伝わる平易な日本語。
 
 import type { DiagnosticQuestion, EmotionKey } from "./types";
 
 // ============================================================
-// G1: 4軸 各8問(32問)
+// axis: 4軸 + 人を読む力(26問)
 // ============================================================
 export const AXIS_QUESTIONS: DiagnosticQuestion[] = [
-  // A軸
-  { id: "A-1", text: "気に入らないことがあると、まず身体が反応する(胸が詰まる、頭に血が上るなど)", category: "axis_A", kind: "core", weight: 1.5 },
-  { id: "A-2", text: "「なぜそう思うのか」を説明できなくても、好き嫌いがはっきりしている", category: "axis_A", kind: "core", weight: 1.5 },
-  { id: "A-3", text: "何かを始めるとき、理由より先に「やりたい」という感覚が来る", category: "axis_A", kind: "core", weight: 1.5 },
-  { id: "A-4", text: "楽しいことには時間を忘れて没頭できる", category: "axis_A", kind: "support", weight: 1.0 },
-  { id: "A-5", text: "怒りや興奮が、思っていたより強く出ることがある", category: "axis_A", kind: "support", weight: 1.0 },
-  { id: "A-6", text: "感情が動いていないとき、行動のエネルギーが湧きにくい", category: "axis_A", kind: "support", weight: 1.0 },
-  { id: "A-7", text: "感情を表に出すことは、大人として控えるべきだと思う", category: "axis_A", kind: "reverse", weight: 1.0 },
-  { id: "A-8", text: "自分の感情より、場の雰囲気を優先することがほとんどだ", category: "axis_A", kind: "reverse", weight: 1.0 },
-  // B軸
-  { id: "B-1", text: "失敗や恥ずかしいことを見られると、頭から離れない", category: "axis_B", kind: "core", weight: 1.5 },
-  { id: "B-2", text: "相手が何を期待しているかを、無意識に読もうとしている", category: "axis_B", kind: "core", weight: 1.5 },
-  { id: "B-3", text: "断ることへの抵抗が強く、断った後も気になる", category: "axis_B", kind: "core", weight: 1.5 },
-  { id: "B-4", text: "グループの中で浮いていると感じると、言動を調整したくなる", category: "axis_B", kind: "support", weight: 1.0 },
-  { id: "B-5", text: "他者からの評価が上がると、自分の調子も上がる", category: "axis_B", kind: "support", weight: 1.0 },
-  { id: "B-6", text: "「自分だけ違う意見を言う」ことに、エネルギーが要る", category: "axis_B", kind: "support", weight: 1.0 },
-  { id: "B-7", text: "他人の目はほとんど気にならない", category: "axis_B", kind: "reverse", weight: 1.0 },
-  { id: "B-8", text: "承認されなくても、自分のやり方を変えるつもりはない", category: "axis_B", kind: "reverse", weight: 1.0 },
-  // C軸
-  { id: "C-1", text: "理由を説明できないが、「これは違う」という感覚がある", category: "axis_C", kind: "core", weight: 1.5 },
-  { id: "C-2", text: "初対面でも、相手がどんな人かを早い段階で読める", category: "axis_C", kind: "core", weight: 1.5 },
-  { id: "C-3", text: "現場で「今この瞬間が勝負どころ」だと感じる瞬間がある", category: "axis_C", kind: "core", weight: 1.5 },
-  { id: "C-4", text: "過去の経験から、「このパターンは危ない」と察知できる", category: "axis_C", kind: "support", weight: 1.0 },
-  { id: "C-5", text: "データが出そろう前に、結論の方向性が見えることがある", category: "axis_C", kind: "support", weight: 1.0 },
-  { id: "C-6", text: "言語化できないが、この判断は正しいと確信できる瞬間がある", category: "axis_C", kind: "support", weight: 1.0 },
-  { id: "C-7", text: "根拠がない判断は信用しない", category: "axis_C", kind: "reverse", weight: 1.0 },
-  { id: "C-8", text: "「なんとなく」で決めることは、ほぼない", category: "axis_C", kind: "reverse", weight: 1.0 },
-  // D軸
-  { id: "D-1", text: "行動する前に、目的・手順・想定リスクを整理したくなる", category: "axis_D", kind: "core", weight: 1.5 },
-  { id: "D-2", text: "同じ成果を出すなら、再現性がある方法を選ぶ", category: "axis_D", kind: "core", weight: 1.5 },
-  { id: "D-3", text: "感情的な判断より、論理的な根拠に基づく判断を信頼する", category: "axis_D", kind: "core", weight: 1.5 },
-  { id: "D-4", text: "曖昧な状況より、ルールや基準が明確な状況の方が力を発揮できる", category: "axis_D", kind: "support", weight: 1.0 },
-  { id: "D-5", text: "計画が崩れると、立て直すまでのコストが大きい", category: "axis_D", kind: "support", weight: 1.0 },
-  { id: "D-6", text: "「なぜそうするのか」を説明できないプロセスには、従いたくない", category: "axis_D", kind: "support", weight: 1.0 },
-  { id: "D-7", text: "計画より、その場の判断で動く方が性に合っている", category: "axis_D", kind: "reverse", weight: 1.0 },
-  { id: "D-8", text: "ルールや手順は、状況次第で無視していい", category: "axis_D", kind: "reverse", weight: 1.0 },
+  // ─────── 情熱(自分の感情)5問 ───────
+  { id: "A-1", text: "嫌なことがあったとき、理由を考える前にまず身体が反応する(胸が締まる、動悸、熱くなる など)", category: "axis_A", kind: "core", weight: 1.5 },
+  { id: "A-2", text: "危険や違和感を、理屈より先に感覚として察知できる", category: "axis_A", kind: "core", weight: 1.5 },
+  { id: "A-3", text: "誰もいない場所で、好きなものに触れたとき、内側が強く動く", category: "axis_A", kind: "core", weight: 1.5 },
+  { id: "A-4", text: "嬉しいとき、その場で素直に「嬉しい」と表現できる", category: "axis_A", kind: "support", weight: 1.5 },
+  { id: "A-5", text: "嫌だと感じたことを、相手にそのまま「嫌だ」と伝えられる", category: "axis_A", kind: "support", weight: 1.5 },
+
+  // ─────── 関係(周りへの感情)6問 ───────
+  { id: "B-1", text: "他人にどう思われているかが、頭から離れない時間がある", category: "axis_B", kind: "core", weight: 1.5 },
+  { id: "B-2", text: "「期待されている」と感じると、それに応えなければというプレッシャーが強くなる", category: "axis_B", kind: "core", weight: 1.5 },
+  { id: "B-3", text: "拒絶・否定されると、その後しばらく内側で引っかかり続ける", category: "axis_B", kind: "core", weight: 1.5 },
+  { id: "B-4", text: "嫌われたくなくて、断れないことがある", category: "axis_B", kind: "support", weight: 1.5 },
+  { id: "B-5", text: "場の空気を壊さないように、自分の発言や行動を調整する", category: "axis_B", kind: "support", weight: 1.5 },
+  { id: "B-6", text: "周囲の反応によって、意思決定が変わることがある", category: "axis_B", kind: "support", weight: 1.5 },
+
+  // ─────── 洞察(経験での判断)5問 ───────
+  { id: "C-1", text: "自分の主な仕事領域で、言語化できないが「これは行ける/危ない」と分かる瞬間がある", category: "axis_C", kind: "core", weight: 2.0 },
+  { id: "C-2", text: "5年前なら気づかなかった微細なシグナル(相手の表情・場の流れ等)に、今は気づける", category: "axis_C", kind: "core", weight: 1.5 },
+  { id: "C-3", text: "「なぜそう判断したか」を後から言葉にしようとすると、上手く説明できない", category: "axis_C", kind: "core", weight: 1.0 },
+  { id: "C-4", text: "過去の似た失敗経験が、瞬間的に判断を助けることがある", category: "axis_C", kind: "support", weight: 1.5 },
+  { id: "C-5", text: "専門外の領域では、自分の直感が当てにならないと自覚している", category: "axis_C", kind: "support", weight: 1.5 },
+
+  // ─────── 論理(言葉での判断)5問 ───────
+  { id: "D-1", text: "判断する前に、目的と基準を言語化したくなる", category: "axis_D", kind: "core", weight: 1.5 },
+  { id: "D-2", text: "自分の判断理由を、他者に分かるように説明できる", category: "axis_D", kind: "core", weight: 1.5 },
+  { id: "D-3", text: "成功パターンを言葉で残すことを習慣にしている", category: "axis_D", kind: "core", weight: 1.5 },
+  { id: "D-4", text: "感情が動いた直後でも、論理的に整理してから動ける", category: "axis_D", kind: "support", weight: 1.5 },
+  { id: "D-5", text: "「考えすぎて動けない」状態に陥ることがある", category: "axis_D", kind: "support", weight: 1.0 },
+
+  // ─────── 人を読む力(対人カン・B由来C)5問 ───────
+  { id: "BC-1", text: "相手が「大丈夫」と言っていても、大丈夫じゃないと察知できる", category: "axis_BC", kind: "core", weight: 2.0 },
+  { id: "BC-2", text: "初対面で「この人は信頼できる/危ない」を感じ取り、後で当たることが多い", category: "axis_BC", kind: "core", weight: 1.5 },
+  { id: "BC-3", text: "場が変な空気になる前に、その兆しを感じる", category: "axis_BC", kind: "core", weight: 1.5 },
+  { id: "BC-4", text: "過去に拒絶や裏切りを経験し、それを今の対人判断に活かしている", category: "axis_BC", kind: "support", weight: 1.5 },
+  { id: "BC-5", text: "「人は必ず裏切る」「結局みんな自分のことしか考えない」と感じることがある", category: "axis_BC", kind: "reverse", weight: 1.0 },
 ];
 
 // ============================================================
-// G2: A発火/A表出の分離(10問+分岐2問)
+// aSeparation: A抑圧判定 + 凍結判別(4問)
+// 「内側で感じてるのに、外に出さない」状態の検出
 // ============================================================
 export const A_SEPARATION_QUESTIONS: DiagnosticQuestion[] = [
-  // 内的A(5問)
-  { id: "iA-1", text: "一人でいるとき、感情の波が来ることがある(喜び・怒り・悲しみなど)", category: "iA", kind: "core", weight: 1.5 },
-  { id: "iA-2", text: "映画や音楽に触れると、感情が動くことが多い", category: "iA", kind: "core", weight: 1.5 },
-  { id: "iA-3", text: "誰にも見られていない状況で、何かに強く反応することがある", category: "iA", kind: "support", weight: 1.0 },
-  { id: "iA-4", text: "自分の内側では、強い好き嫌いがある", category: "iA", kind: "support", weight: 1.0 },
-  { id: "iA-5", text: "感情が動いていないとき、何をしても平坦な感じがする", category: "iA", kind: "support", weight: 1.0 },
-  // 表出A(5問)
-  { id: "eA-1", text: "感じていることを、相手に伝えることができる", category: "eA", kind: "core", weight: 1.5 },
-  { id: "eA-2", text: "嬉しいときに、素直に喜びを表現できる", category: "eA", kind: "core", weight: 1.5 },
-  { id: "eA-3", text: "嫌なときに「嫌だ」と言える", category: "eA", kind: "support", weight: 1.0 },
-  { id: "eA-4", text: "感情を出したとき、後悔することが少ない", category: "eA", kind: "support", weight: 1.0 },
-  { id: "eA-5", text: "感情を出すと、関係が壊れると思うことが多い", category: "eA", kind: "reverse", weight: 1.0 },
+  // A抑圧判定 ── 一人だと感じる、人前だと出せない
+  { id: "AS-1", text: "一人ならできるが、人前ではできない感情表現がある", category: "AS", kind: "core", weight: 2.0 },
+  { id: "AS-2", text: "後から「本当はこう言いたかった」と思うことが多い", category: "AS", kind: "core", weight: 2.0 },
 ];
 
-// 凍結型判別(条件分岐: 内的A高 × 表出A低 のみ表示)
+// 凍結判別(常時2問・条件分岐なし、シンプル化)
 export const FZ_QUESTIONS: DiagnosticQuestion[] = [
-  { id: "FZ-1", text: "強いストレス下で、何も感じなくなる・頭が真っ白になることがある", category: "FZ", kind: "core", weight: 1.0 },
-  { id: "FZ-2", text: "過去に強い恐怖や衝撃的な経験があり、今も特定の状況で固まる感覚がある", category: "FZ", kind: "core", weight: 1.0 },
+  { id: "FZ-1", text: "「何も感じない」「何がしたいか分からない」状態があることがある", category: "FZ", kind: "core", weight: 2.0 },
+  { id: "FZ-2", text: "沈黙しているとき、内側では強く感じていることが多い", category: "FZ", kind: "core", weight: 2.0 },
 ];
 
 // ============================================================
-// G4: 統合状態(Observer + 切り替え自覚)(10問)
+// integration: 気づきの力(Observer 5問 + 考えすぎ 2問)
 // ============================================================
 export const INTEGRATION_QUESTIONS: DiagnosticQuestion[] = [
-  // Observer起動(5問)
-  { id: "OB-1", text: "感情が強く動いたとき、少し間を置いてから行動できることがある", category: "OB", kind: "core", weight: 1.5 },
-  { id: "OB-2", text: "「今、自分は感情的になっている」と、感情の中で気づけることがある", category: "OB", kind: "core", weight: 1.5 },
-  { id: "OB-3", text: "衝動的に動きそうになったとき、一瞬止まれることがある", category: "OB", kind: "support", weight: 1.0 },
-  { id: "OB-4", text: "行動した後で「あのときAで動いていた」と振り返れることがある", category: "OB", kind: "support", weight: 1.0 },
-  { id: "OB-5", text: "「本当はこうしたかった」と後から気づくことが、最近減ってきた", category: "OB", kind: "support", weight: 1.0 },
-  // 切り替え自覚(5問)
-  { id: "SW-1", text: "論理で考えるモードと、感覚で動くモードの両方を、自分の中に感じる", category: "SW", kind: "core", weight: 1.5 },
-  { id: "SW-2", text: "状況によって、自分の動き方が変わることを自覚している", category: "SW", kind: "core", weight: 1.5 },
-  { id: "SW-3", text: "「今は感情より論理で判断すべき場面だ」と判断できることがある", category: "SW", kind: "support", weight: 1.0 },
-  { id: "SW-4", text: "「今は分析より直感を信じていい」と思えることがある", category: "SW", kind: "support", weight: 1.0 },
-  { id: "SW-5", text: "自分の反応パターンを、ある程度予測できる", category: "SW", kind: "support", weight: 1.0 },
+  // 気づきの段階(Observer Lv.1 → Lv.3)
+  { id: "OB-1", text: "感情で動いた後で「あのとき感情で動いていた」と気づくことがある", category: "OB", kind: "core", weight: 1.5 }, // Lv.1事後
+  { id: "OB-2", text: "感情が動いている最中に「今これに反応している」と認識できることがある", category: "OB", kind: "core", weight: 1.5 }, // Lv.2途中
+  { id: "OB-3", text: "強い感情が湧きそうなとき、湧く前に予測してブレーキをかけられる", category: "OB", kind: "core", weight: 2.0 }, // Lv.3事前
+  { id: "OB-4", text: "「分かっているのにできない」状態を経験することがある", category: "OB", kind: "support", weight: 1.0 },
+  { id: "OB-5", text: "衝動的に動きそうなとき、一瞬止まれることがある", category: "OB", kind: "support", weight: 1.5 }, // Veto
+
+  // 考えすぎ状態(過剰Observer)
+  { id: "OD-1", text: "すべての感情・行動に対して自分を監視する癖があり、それで動きが鈍ることがある", category: "OD", kind: "core", weight: 1.5 },
+  { id: "OD-2", text: "何かを決めるとき、選択肢を見すぎて決められなくなることがある", category: "OD", kind: "core", weight: 1.5 },
 ];
 
 // ============================================================
-// G3: 責任感の3形態(12問)
+// responsibility: 強みのペア・組み合わせクセ(8問)
+// 二つの軸が結びついて他を抑圧する状態を検出
 // ============================================================
 export const RESPONSIBILITY_QUESTIONS: DiagnosticQuestion[] = [
-  // D型責任感
-  { id: "DR-1", text: "ルールや約束を守ることは、状況に関わらず重要だと思う", category: "DR", kind: "core", weight: 1.0 },
-  { id: "DR-2", text: "決めたことを最後まで実行することが、責任だと考える", category: "DR", kind: "core", weight: 1.0 },
-  { id: "DR-3", text: "手順やプロセスが正しければ、結果が予想外でも問題ないと思える", category: "DR", kind: "core", weight: 1.0 },
-  { id: "DR-4", text: "組織のルールに従うことが、自分の役割だと感じる", category: "DR", kind: "core", weight: 1.0 },
-  // B型責任感
-  { id: "BR-1", text: "頼まれたことは、できる限り断らないようにしている", category: "BR", kind: "core", weight: 1.0 },
-  { id: "BR-2", text: "期待されていると感じると、それに応えなければという気持ちが強くなる", category: "BR", kind: "core", weight: 1.0 },
-  { id: "BR-3", text: "自分の仕事が誰かの役に立っていると感じると、頑張れる", category: "BR", kind: "core", weight: 1.0 },
-  { id: "BR-4", text: "失望させることへの恐れが、行動の動機になっていることがある", category: "BR", kind: "core", weight: 1.0 },
-  // A型責任感
-  { id: "AR-1", text: "自分がやると決めたことは、誰に言われなくてもやり切る", category: "AR", kind: "core", weight: 1.0 },
-  { id: "AR-2", text: "成果が出なければ、ルールを守っていても意味がないと思う", category: "AR", kind: "core", weight: 1.0 },
-  { id: "AR-3", text: "自分が「正しい」と思えないことには、責任を持てない", category: "AR", kind: "core", weight: 1.0 },
-  { id: "AR-4", text: "責任を感じるのは、自分が心から関わりたいと思っている仕事だ", category: "AR", kind: "core", weight: 1.0 },
+  // 「関係 × 論理」=「正しさの檻」(期待×論理で自分を縛るクセ)
+  { id: "AL-BD1", text: "「期待に応えなければ」という感覚と、「論理的に正しいから」という感覚が混ざって自分を駆動することがある", category: "AL_BD", kind: "core", weight: 1.5 },
+  { id: "AL-BD2", text: "疲れていても「やるべきだから」「期待されているから」を理由に続けてしまう", category: "AL_BD", kind: "core", weight: 1.5 },
+
+  // 「情熱 × 洞察」=「天才の暴走」(感じたこと+経験で他を軽視するクセ)
+  { id: "AL-AC1", text: "自分の感じたことと過去の経験が合致すれば、他人の異論や論理は不要と感じる", category: "AL_AC", kind: "core", weight: 1.5 },
+  { id: "AL-AC2", text: "計画や慎重さより、自分の感覚と経験で動く方がうまくいく", category: "AL_AC", kind: "core", weight: 1.5 },
+
+  // 「関係 × 洞察」=「空気の独裁」(空気と経験で本音を出さないクセ)
+  { id: "AL-BC1", text: "場の空気を読み、過去の経験的にこの場はこう動くと感じたら、本音を出すより合わせる", category: "AL_BC", kind: "core", weight: 1.5 },
+  { id: "AL-BC2", text: "「前回うまくいったから今回も同じやり方で」と組織や自分で繰り返している", category: "AL_BC", kind: "core", weight: 1.5 },
+
+  // 「情熱 × 関係」=「承認の炎」(感情と承認で振り回されるクセ)
+  { id: "AL-AB1", text: "強く感じたことを、誰かに認められたい気持ちが同時に来ることがある", category: "AL_AB", kind: "core", weight: 1.5 },
+  { id: "AL-AB2", text: "認められると無敵、拒絶されると崩壊するような両極端の気分を経験する", category: "AL_AB", kind: "core", weight: 1.5 },
 ];
 
 // ============================================================
-// G5: 組織毀損プロファイル(9問)
+// orgRisk: コンディション(2問)
+// 身体・睡眠は心理機能の土台
 // ============================================================
 export const ORG_RISK_QUESTIONS: DiagnosticQuestion[] = [
-  // 承認略奪型
-  { id: "AG-1", text: "自分の成果が正当に評価されていないと感じることが多い", category: "AG", kind: "core", weight: 1.0 },
-  { id: "AG-2", text: "うまくいかないとき、周囲や環境のせいだと感じることがある", category: "AG", kind: "core", weight: 1.0 },
-  { id: "AG-3", text: "自分より評価されている人を見ると、腑に落ちないことがある", category: "AG", kind: "core", weight: 1.0 },
-  // ルール暴力型
-  { id: "RV-1", text: "感情論で話す人と議論するのは、時間の無駄だと思う", category: "RV", kind: "core", weight: 1.0 },
-  { id: "RV-2", text: "ルールや論理に従わない人には、はっきり指摘すべきだと思う", category: "RV", kind: "core", weight: 1.0 },
-  { id: "RV-3", text: "正しいことを言っているのに受け入れられないとき、相手の理解力を疑う", category: "RV", kind: "core", weight: 1.0 },
-  // 衝動暴走型
-  { id: "IM-1", text: "怒りや不満が、思っていたより強く出て後悔することがある", category: "IM", kind: "core", weight: 1.0 },
-  { id: "IM-2", text: "気分によって、同じ人・同じ仕事への態度が大きく変わることがある", category: "IM", kind: "core", weight: 1.0 },
-  { id: "IM-3", text: "感情が高ぶると、言ってはいけないことを言ってしまうことがある", category: "IM", kind: "core", weight: 1.0 },
+  { id: "PL-1", text: "最近1ヶ月、十分に眠れていると感じる", category: "PL", kind: "core", weight: 2.0 },
+  { id: "PL-2", text: "自分の身体感覚(疲労・空腹・違和感)に気づきやすい", category: "PL", kind: "core", weight: 1.5 },
 ];
 
 // ============================================================
-// セクション定義(応募フォームで段階表示)
+// セクション定義(/diagnose で段階表示)
 // ============================================================
 export interface QuestionSection {
   id: string;
@@ -141,43 +131,48 @@ export interface QuestionSection {
 export const QUESTION_SECTIONS: QuestionSection[] = [
   {
     id: "axis",
-    title: "Section 1: 4軸の傾向",
-    description: "あなたの判断や行動の傾向を、4つの軸から測定します(32問)",
+    title: "Section 1: 4つの動き方(26問)",
+    description:
+      "あなたが普段「何で動いているか」を測ります。情熱(自分の感情)/関係(周りへの感情)/洞察(経験での判断)/論理(言葉での判断)+ 人を読む力(対人カン)の26問。",
     questions: AXIS_QUESTIONS,
     field: "axis",
   },
   {
     id: "aSeparation",
-    title: "Section 2: 感情の内的発生と外的表出",
-    description: "「一人でいるとき」「見られていないとき」に限定した質問を含みます(10問)",
-    questions: A_SEPARATION_QUESTIONS,
+    title: "Section 2: 内側と外側のギャップ(4問)",
+    description:
+      "「内側で感じていることを、外に出せているか」「強いストレス下で何が起きるか」を見ます。4問。",
+    questions: [...A_SEPARATION_QUESTIONS, ...FZ_QUESTIONS],
     field: "aSeparation",
   },
   {
     id: "integration",
-    title: "Section 3: 切り替えと自己観察",
-    description: "感情と理性のモードを切り替えられる感覚を測定します(10問)",
+    title: "Section 3: 気づきの力(7問)",
+    description:
+      "感情や反応に気づき、行動を選び直せるかを測ります。考えすぎで動けない傾向も同時に確認します。7問。",
     questions: INTEGRATION_QUESTIONS,
     field: "integration",
   },
   {
     id: "responsibility",
-    title: "Section 4: 責任感の形",
-    description: "あなたが感じる責任感の起源を見ます(12問)",
+    title: "Section 4: 強みのペア・組み合わせクセ(8問)",
+    description:
+      "2つの強みが結びついて他を見えなくする「クセ」を検出します。日常では強みに見えますが、特定の場面で盲点になります。8問。",
     questions: RESPONSIBILITY_QUESTIONS,
     field: "responsibility",
   },
   {
     id: "orgRisk",
-    title: "Section 5: 組織内での反応傾向",
-    description: "ストレス下や評価場面での反応パターンを確認します(9問)",
+    title: "Section 5: コンディション(2問)",
+    description:
+      "心理機能の土台となる身体・睡眠の状態を確認します。2問。",
     questions: ORG_RISK_QUESTIONS,
     field: "orgRisk",
   },
 ];
 
 // ============================================================
-// 5感情自己評価(各1〜5)
+// 5感情(現在の状態)
 // ============================================================
 export const EMOTION_QUESTIONS: { key: EmotionKey; text: string }[] = [
   { key: "fear", text: "現在、どの程度「不安」を感じていますか?" },
@@ -187,5 +182,5 @@ export const EMOTION_QUESTIONS: { key: EmotionKey; text: string }[] = [
   { key: "happiness", text: "現在、どの程度「幸福」を感じていますか?" },
 ];
 
-// 旧 Q1-Q9 互換性のため残す(削除予定)
+// v1.0 互換性のため残す
 export const QUESTIONS = AXIS_QUESTIONS;

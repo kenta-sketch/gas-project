@@ -32,6 +32,13 @@ import type {
   NeutralFrequencyV1,
   AxisCorrelationCorrection,
   ResponseTimings,
+  // v2.0(2026-06-13)
+  AllianceDiagnosis,
+  AllianceFlag,
+  AllianceKind,
+  PlatformDiagnosis,
+  BcInsightScore,
+  OverObserverDiagnosis,
 } from "./types";
 
 // ============================================================
@@ -71,30 +78,49 @@ export function computeAxisScores(answers: DiagnosticAnswers): AxisScores {
 }
 
 // ============================================================
-// G2: A発火/A表出分離(25点満点)
+// 情熱(自分の感情)の内外分離(v2.0)
+// 内側(A-1〜A-3): axis フィールドから
+// 外側(A-4, A-5): axis フィールドから
+// 抑圧判定(AS-1, AS-2): aSeparation フィールドから
+// 凍結判別(FZ-1, FZ-2): aSeparation フィールドから
 // ============================================================
 export function computeASeparation(answers: DiagnosticAnswers): ASeparation {
-  const iAQs = A_SEPARATION_QUESTIONS.filter((q) => q.category === "iA");
-  const eAQs = A_SEPARATION_QUESTIONS.filter((q) => q.category === "eA");
-  const internal = scaleTo(weightedSum(iAQs, answers.aSeparation), 25);
-  const external = scaleTo(weightedSum(eAQs, answers.aSeparation), 25);
+  // 内的A(自分の中の感情): A-1, A-2, A-3 (axis_A の core)
+  const iAQs = AXIS_QUESTIONS.filter(
+    (q) => q.category === "axis_A" && ["A-1", "A-2", "A-3"].includes(q.id),
+  );
+  // 表出A(外に出せる): A-4, A-5
+  const eAQs = AXIS_QUESTIONS.filter(
+    (q) => q.category === "axis_A" && ["A-4", "A-5"].includes(q.id),
+  );
+  const internal = scaleTo(weightedSum(iAQs, answers.axis), 25);
+  const external = scaleTo(weightedSum(eAQs, answers.axis), 25);
 
-  // FZ判定: 内的A高 × 表出A低 のみFZ問題が回答されている
-  const fzAnswers = FZ_QUESTIONS.filter((q) => answers.aSeparation[q.id] !== undefined);
-  const fzAvg =
-    fzAnswers.length > 0
-      ? fzAnswers.reduce((s, q) => s + (answers.aSeparation[q.id] ?? 0), 0) / fzAnswers.length
-      : 0;
-  const frozen = fzAvg >= 3.5; // 平均3.5以上で凍結フラグ
+  // 抑圧判定: AS-1(人前ではできない), AS-2(後から悔やむ) の平均
+  const asValues = ["AS-1", "AS-2"]
+    .map((id) => answers.aSeparation[id])
+    .filter((v): v is LikertValue => v !== undefined);
+  const asAvg = asValues.length > 0 ? asValues.reduce((s, v) => s + v, 0) / asValues.length : 0;
+
+  // 凍結判別: FZ-1(何も感じない) の値が主
+  const fz1 = answers.aSeparation["FZ-1"] ?? 0;
+  const fz2 = answers.aSeparation["FZ-2"] ?? 0;
+  // 凍結 = FZ-1 高い かつ FZ-2 低い(沈黙時に感じてない)
+  const frozen = fz1 >= 4 && fz2 <= 2;
 
   let classification: AClassification;
   const INTERNAL_THRESHOLD = 13;
   const EXTERNAL_THRESHOLD = 13;
+  const SUPPRESSION_THRESHOLD = 3.5;
 
   if (internal < INTERNAL_THRESHOLD && external < EXTERNAL_THRESHOLD) {
-    classification = "真性A低";
+    // 内側も外側も弱い → 真性A低 or 凍結
+    classification = frozen ? "A凍結型" : "真性A低";
   } else if (internal >= INTERNAL_THRESHOLD && external < EXTERNAL_THRESHOLD) {
-    classification = frozen ? "A凍結型" : "A抑圧型";
+    // 内側強い・外側弱い → 抑圧 or 凍結
+    if (frozen) classification = "A凍結型";
+    else if (asAvg >= SUPPRESSION_THRESHOLD) classification = "A抑圧型";
+    else classification = "A抑圧型"; // 軽度でも抑圧として扱う
   } else if (internal >= INTERNAL_THRESHOLD && external >= EXTERNAL_THRESHOLD) {
     classification = "A管理型";
   } else {
@@ -105,18 +131,21 @@ export function computeASeparation(answers: DiagnosticAnswers): ASeparation {
 }
 
 // ============================================================
-// G4: 統合状態の直接検出
+// 気づきの力(Observer)v2.0
+// OB-1〜OB-5(5問)を 30点満点に正規化。Switch廃止、Index は Observer単独。
+// 過剰Observer(OD-1, OD-2)は別関数 computeOverObserver で計算。
 // ============================================================
 export function computeIntegration(
   answers: DiagnosticAnswers,
   axisScores: AxisScores,
 ): IntegrationDiagnosis {
   const obQs = INTEGRATION_QUESTIONS.filter((q) => q.category === "OB");
-  const swQs = INTEGRATION_QUESTIONS.filter((q) => q.category === "SW");
-  // 各セクション 30点満点に正規化
+  // 30点満点に正規化(OB 5問・重み合計 7.5、5*7.5=37.5 → 30に変換)
   const observerScore = scaleTo(weightedSum(obQs, answers.integration), 30);
-  const switchScore = scaleTo(weightedSum(swQs, answers.integration), 30);
-  const index = (observerScore + switchScore) / 2;
+  // Switch は廃止、互換のため同じスコアを使用
+  const switchScore = observerScore;
+  // 統合指数 = Observer 単独
+  const index = observerScore;
 
   const allAxes = [axisScores.A, axisScores.B, axisScores.C, axisScores.D];
   const allBalanced = allAxes.every((v) => v >= 13);
@@ -126,9 +155,9 @@ export function computeIntegration(
   const isBalanced = max - min < 8;
 
   let status: IntegrationStatus;
-  if (index >= 20 && allBalanced) {
+  if (index >= 22 && allBalanced) {
     status = "本物の統合";
-  } else if (index >= 20 && anyLow) {
+  } else if (index >= 18 && anyLow) {
     status = "部分統合";
   } else if (index < 15 && isBalanced) {
     status = "偽の中庸";
@@ -140,67 +169,125 @@ export function computeIntegration(
 }
 
 // ============================================================
-// G3: 責任感の3形態
+// 過剰Observer(考えすぎ状態)v2.0 新規
+// OD-1, OD-2 の平均が 3.5 以上で「考えすぎ」フラグ
+// ============================================================
+export function computeOverObserver(answers: DiagnosticAnswers): OverObserverDiagnosis {
+  const values = ["OD-1", "OD-2"]
+    .map((id) => answers.integration[id])
+    .filter((v): v is LikertValue => v !== undefined);
+  const level = values.length > 0 ? values.reduce((s, v) => s + v, 0) / values.length : 0;
+  const flag = level >= 3.5;
+  let note: string;
+  if (level >= 4) note = "監視しすぎで動けない傾向が強い。情報を絞る訓練が必要。";
+  else if (level >= 3) note = "やや考えすぎる傾向。決断期限を構造的に設けると楽になる。";
+  else note = "適度。判断と行動のバランスが取れている。";
+  return { level: Math.round(level * 10) / 10, flag, note };
+}
+
+// ============================================================
+// 人を読む力(対人カン・B由来C)v2.0 新規
+// BC-1〜BC-4 が主、BC-5 が逆指標(歪曲度)
+// ============================================================
+export function computeBcInsight(answers: DiagnosticAnswers): BcInsightScore {
+  const coreQs = AXIS_QUESTIONS.filter(
+    (q) => q.category === "axis_BC" && ["BC-1", "BC-2", "BC-3", "BC-4"].includes(q.id),
+  );
+  const score = scaleTo(weightedSum(coreQs, answers.axis), 25);
+  const distortion = answers.axis["BC-5"] ?? 0;
+  let status: "healthy" | "distorted" | "low";
+  if (score >= 17 && distortion <= 3) status = "healthy";
+  else if (score >= 13 && distortion >= 4) status = "distorted";
+  else if (score < 13) status = "low";
+  else status = "healthy";
+  return { score, distortion, status };
+}
+
+// ============================================================
+// 強みのペア・組み合わせクセ(エンジン同盟)v2.0 新規
+// 4ペア × 2問。各ペアの平均が 4.0以上で strong / 3.0以上で medium
+// ============================================================
+const ALLIANCE_LABELS: Record<AllianceKind, string> = {
+  AL_BD: "関係 × 論理(「正しさで自分を縛る」クセ)",
+  AL_AC: "情熱 × 洞察(「感覚と経験で押し切る」クセ)",
+  AL_BC: "関係 × 洞察(「空気と経験で本音を出さない」クセ)",
+  AL_AB: "情熱 × 関係(「感情と承認で振り回される」クセ)",
+};
+
+export function computeAlliances(answers: DiagnosticAnswers): AllianceDiagnosis {
+  const flags: AllianceFlag[] = [];
+  const pairs: { kind: AllianceKind; ids: string[] }[] = [
+    { kind: "AL_BD", ids: ["AL-BD1", "AL-BD2"] },
+    { kind: "AL_AC", ids: ["AL-AC1", "AL-AC2"] },
+    { kind: "AL_BC", ids: ["AL-BC1", "AL-BC2"] },
+    { kind: "AL_AB", ids: ["AL-AB1", "AL-AB2"] },
+  ];
+  for (const { kind, ids } of pairs) {
+    const values = ids
+      .map((id) => answers.responsibility[id])
+      .filter((v): v is LikertValue => v !== undefined);
+    if (values.length === 0) continue;
+    const strength = values.reduce((s, v) => s + v, 0) / values.length;
+    let level: "weak" | "medium" | "strong";
+    if (strength >= 4.0) level = "strong";
+    else if (strength >= 3.0) level = "medium";
+    else level = "weak";
+    if (level !== "weak") {
+      flags.push({
+        kind,
+        label: ALLIANCE_LABELS[kind],
+        strength: Math.round(strength * 10) / 10,
+        level,
+      });
+    }
+  }
+  return { flags, hasStrongPair: flags.some((f) => f.level === "strong") };
+}
+
+// ============================================================
+// コンディション(身体・睡眠・Platform層)v2.0 新規
+// PL-1(睡眠)+ PL-2(身体感覚)
+// ============================================================
+export function computePlatform(answers: DiagnosticAnswers): PlatformDiagnosis {
+  const pl1 = answers.orgRisk["PL-1"] ?? 0; // 睡眠十分か
+  const pl2 = answers.orgRisk["PL-2"] ?? 0; // 身体感覚に気づきやすいか
+  const score = pl1 + pl2; // 0-10
+  let status: "good" | "warn" | "low";
+  let note: string;
+  if (score >= 8) {
+    status = "good";
+    note = "心理機能を支える土台が整っている。Observerもエンジンも本来のパフォーマンスを発揮できる。";
+  } else if (score >= 5) {
+    status = "warn";
+    note = "土台がやや弱い。睡眠と身体ケアを優先することで判断と気づきが安定する。";
+  } else {
+    status = "low";
+    note = "土台が崩れている。心理ワークより先に身体の回復が最優先。";
+  }
+  return { score, status, note };
+}
+
+// ============================================================
+// 旧 G3 責任感(v2.0で廃止、後方互換のため空ダミーを返す)
+// 古い Diagnosis レコード/UIで参照されている可能性があるため残置。
+// 新しい意味は computeAlliances(強みのペア)に移行。
 // ============================================================
 export function computeResponsibility(
-  answers: DiagnosticAnswers,
+  _answers: DiagnosticAnswers,
 ): ResponsibilityDiagnosis {
-  const drQs = RESPONSIBILITY_QUESTIONS.filter((q) => q.category === "DR");
-  const brQs = RESPONSIBILITY_QUESTIONS.filter((q) => q.category === "BR");
-  const arQs = RESPONSIBILITY_QUESTIONS.filter((q) => q.category === "AR");
-  // 各4問×1〜5 = 4〜20点
-  const drSum = drQs.reduce((s, q) => s + (answers.responsibility[q.id] ?? 0), 0);
-  const brSum = brQs.reduce((s, q) => s + (answers.responsibility[q.id] ?? 0), 0);
-  const arSum = arQs.reduce((s, q) => s + (answers.responsibility[q.id] ?? 0), 0);
-
-  const scores: Record<ResponsibilityKind, number> = {
-    D型: drSum,
-    B型: brSum,
-    A型: arSum,
-  };
-
-  const sorted = (Object.keys(scores) as ResponsibilityKind[]).sort(
-    (a, b) => scores[b] - scores[a],
-  );
-  const primary = sorted[0];
-  const secondary = sorted[1];
-  const isCompound = scores[primary] - scores[secondary] < 3;
-
   return {
-    scores,
-    primary,
-    secondary: isCompound ? secondary : undefined,
-    isCompound,
+    scores: { D型: 0, B型: 0, A型: 0 },
+    primary: "D型" as ResponsibilityKind,
+    secondary: undefined,
+    isCompound: false,
   };
 }
 
 // ============================================================
-// G5: 組織毀損プロファイル
+// 旧 G5 組織毀損(v2.0で廃止、後方互換のため空ダミーを返す)
 // ============================================================
-function computeRiskCategory(
-  category: OrgRiskCategory,
-  prefix: "AG" | "RV" | "IM",
-  answers: DiagnosticAnswers,
-): OrgRiskFlag | null {
-  const qs = ORG_RISK_QUESTIONS.filter((q) => q.category === prefix);
-  const sum = qs.reduce((s, q) => s + (answers.orgRisk[q.id] ?? 0), 0);
-  // 3問×1〜5 = 3〜15点
-  let level: "low" | "medium" | "high";
-  if (sum >= 12) level = "high";
-  else if (sum >= 9) level = "medium";
-  else return null; // 閾値未満ならフラグ立てない
-  return { category, score: sum, level };
-}
-
-export function computeOrgRisk(answers: DiagnosticAnswers): OrgRiskDiagnosis {
-  const flags: OrgRiskFlag[] = [];
-  const ag = computeRiskCategory("承認略奪型", "AG", answers);
-  const rv = computeRiskCategory("ルール暴力型", "RV", answers);
-  const im = computeRiskCategory("衝動暴走型", "IM", answers);
-  if (ag) flags.push(ag);
-  if (rv) flags.push(rv);
-  if (im) flags.push(im);
-  return { flags, hasAnyRisk: flags.length > 0 };
+export function computeOrgRisk(_answers: DiagnosticAnswers): OrgRiskDiagnosis {
+  return { flags: [], hasAnyRisk: false };
 }
 
 // ============================================================
@@ -462,6 +549,12 @@ export function computeFullDiagnosis(
   const correlationCorrection = computeAxisCorrelationCorrection(scores);
   const timings = timingPerQuestion ? computeResponseTimings(timingPerQuestion) : undefined;
 
+  // v2.0 新規(2026-06-13)
+  const bcInsight = computeBcInsight(answers);
+  const alliances = computeAlliances(answers);
+  const platform = computePlatform(answers);
+  const overObserver = computeOverObserver(answers);
+
   return {
     scores,
     emotions,
@@ -474,6 +567,10 @@ export function computeFullDiagnosis(
     neutralFrequency,
     correlationCorrection,
     timings,
+    bcInsight,
+    alliances,
+    platform,
+    overObserver,
   };
 }
 

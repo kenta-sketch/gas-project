@@ -9,18 +9,39 @@ export const EMOTION_LABEL_JA: Record<EmotionKey, string> = {
   happiness: "幸福",
 };
 
+// ============================================================
+// 4軸ラベル(v2.0 ハイブリッド命名・2026-06-13 内山さん承認)
+// 命名方針:
+//   - 軸名(2文字漢字): レーダーチャート等の表示で印象的に
+//   - 意味: 自分か周りか・感情か思考かの構造を明示
+//   - サブ動詞: 「これ自分の動きだ」と自分事化できる動詞表現
+// ============================================================
 export const AXIS_LABEL_JA: Record<AxisKey, string> = {
-  A: "動物的感情",
-  B: "機械的感情",
-  C: "動物的理性",
-  D: "機械的理性",
+  A: "情熱",
+  B: "関係",
+  C: "洞察",
+  D: "論理",
+};
+
+export const AXIS_LABEL_MEANING: Record<AxisKey, string> = {
+  A: "自分の感情",
+  B: "周りへの感情",
+  C: "経験での判断",
+  D: "言葉での判断",
+};
+
+export const AXIS_LABEL_VERB: Record<AxisKey, string> = {
+  A: "感じる力",
+  B: "つながる力",
+  C: "見抜く力",
+  D: "整理する力",
 };
 
 export const AXIS_DESCRIPTION: Record<AxisKey, string> = {
-  A: "感受性 / 即時の反応 / 共感",
-  B: "承認 / 羞恥 / 社会的同調",
-  C: "直感 / 経験圧縮 / 非言語的判断",
-  D: "論理 / 分析 / 計画 / 説明",
+  A: "自分の中から湧く気持ちが、行動の起点になる",
+  B: "場や周りの人の反応に合わせて、動きを調整する",
+  C: "過去の経験の蓄積から、瞬時に判断する",
+  D: "目的と根拠を整理してから、動く",
 };
 
 export type AxisScores = Record<AxisKey, number>;

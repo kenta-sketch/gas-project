@@ -3,7 +3,7 @@
 このフォルダはクアッドマインド理論プロジェクトに関する全資料の索引。
 材料が来たらここに1行追加し、本体は適切なサブフォルダへ。
 
-最終更新: 2026-05-12(現行仕様書 v1.0+ を新規追加。Likert + 第2層変数 + AI個別分析の3層構造で確定)
+最終更新: 2026-06-13(QMT理論第10版受領 → 50問設計 v2.0 を新規作成。エンジン同盟・B由来C・過剰Observer・Platform層を統合)
 
 ---
 
@@ -170,7 +170,9 @@
 - [`notes/2026-05-03-japan-vs-brazil-civilization.md`](./notes/2026-05-03-japan-vs-brazil-civilization.md) ── 日本×ブラジル文明比較
 
 ### ★ 診断仕様(プロダクト実装の決定版)
-- [`notes/2026-05-12-current-spec-v1-likert.md`](./notes/2026-05-12-current-spec-v1-likert.md) ── ★★★★ **現行プロダクト仕様(v1 Likert + 第2層変数 + AI個別分析、現在の実装に対応)** ← まず読むならココ
+- [`notes/2026-06-13-qmt-50q-design-v2.md`](./notes/2026-06-13-qmt-50q-design-v2.md) ── ★★★★★ **【NEW】QMT 50問設計 v2.0(第10版理論統合・エンジン同盟・B由来C・過剰Observer・Platform層)** ← 次の実装ターゲット
+- [`pdfs/2026-06-13-QMT-theory-v10-complete.pdf`](./pdfs/2026-06-13-QMT-theory-v10-complete.pdf) ── 【NEW】QMT理論完全版 第10版(2026-06-13受領)
+- [`notes/2026-05-12-current-spec-v1-likert.md`](./notes/2026-05-12-current-spec-v1-likert.md) ── ★★★★ **現行プロダクト仕様(v1 Likert + 第2層変数 + AI個別分析、現在の実装に対応)** ← 現状確認はココ
 - [`notes/2026-05-12-iibuchi-action-items.md`](./notes/2026-05-12-iibuchi-action-items.md) ── ★★★ 飯淵さんへの課題まとめ(共有用)
 - [`notes/2026-05-12-session-log-decisions.md`](./notes/2026-05-12-session-log-decisions.md) ── ★★★ 2026-05-12 セッションログ(全経緯)
 - [`notes/2026-05-12-likert-120-empirical-analysis.md`](./notes/2026-05-12-likert-120-empirical-analysis.md) ── ★★ 122人実証分析

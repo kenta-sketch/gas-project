@@ -9,7 +9,8 @@ import { EmotionBars } from "@/components/EmotionBars";
 import { ScoreTable } from "@/components/ScoreTable";
 import { TypeInsight } from "@/components/TypeInsight";
 import { DiagnosticInsight } from "@/components/DiagnosticInsight";
-import { AXIS_LABEL_JA } from "@/lib/types";
+import { AXIS_LABEL_JA, AXIS_LABEL_VERB } from "@/lib/types";
+import { TYPE_DISPLAY_NAME } from "@/data/typeDescriptions";
 import type { StandaloneDiagnosis, PersonalInsight } from "@/lib/types";
 
 export default function DiagnoseResultPage({
@@ -60,7 +61,7 @@ export default function DiagnoseResultPage({
           <h1 className="text-2xl font-bold">{diagnosis.profile.fullName} さんの診断結果</h1>
           <span className="text-xs text-slate-500 ml-auto">診断日: {diagnosis.date}</span>
         </div>
-        <div className="grid gap-1 sm:grid-cols-3 text-sm text-slate-700">
+        <div className="grid gap-1 sm:grid-cols-3 text-sm text-slate-700 mb-3">
           <div>
             年代/性別: {diagnosis.profile.ageRange} {diagnosis.profile.gender}
           </div>
@@ -70,6 +71,10 @@ export default function DiagnoseResultPage({
             </div>
           )}
         </div>
+        <p className="text-xs text-slate-500 leading-relaxed border-t border-slate-100 pt-3">
+          この結果は、あなたを評価するためのものではありません。<b className="text-slate-700">自分を知るための地図</b>です。
+          点数の高い・低いに良し悪しはなく、「いま、何で動いているか」の現在地を示しています。
+        </p>
       </header>
 
       <section className="grid gap-6 md:grid-cols-2">
@@ -84,26 +89,26 @@ export default function DiagnoseResultPage({
             <div className="text-[10px] tracking-[0.25em] uppercase text-slate-500 font-semibold mb-1">
               タイプ
             </div>
-            <div className="font-bold text-2xl text-slate-900">{diagnosis.type}</div>
+            <div className="font-bold text-2xl text-slate-900">{TYPE_DISPLAY_NAME[diagnosis.type] ?? diagnosis.type}</div>
           </div>
           <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-soft">
             <div className="text-[10px] tracking-[0.25em] uppercase text-slate-500 font-semibold mb-1">
-              主エンジン
+              いちばん強い動き方
             </div>
             <div className="font-bold text-lg text-slate-900">
-              {dominantAxis(diagnosis.scores)} ── {AXIS_LABEL_JA[dominantAxis(diagnosis.scores)]}
+              {AXIS_LABEL_JA[dominantAxis(diagnosis.scores)]}({AXIS_LABEL_VERB[dominantAxis(diagnosis.scores)]})
             </div>
           </div>
         </div>
       </section>
 
       <section>
-        <h3 className="font-bold mb-2">A/B/C/D スコア</h3>
+        <h3 className="font-bold mb-2">4つの動き方</h3>
         <ScoreTable scores={diagnosis.scores} />
       </section>
 
       <section>
-        <h3 className="font-bold mb-2">5感情</h3>
+        <h3 className="font-bold mb-2">いまの気持ちの状態(5つの感情)</h3>
         <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-soft">
           <EmotionBars emotions={diagnosis.emotions} />
         </div>
@@ -127,8 +132,16 @@ export default function DiagnoseResultPage({
 
       {diagnosis.result && (
         <section className="space-y-2">
-          <h3 className="font-bold">診断詳細(G2/G3/G4/G5 + 第2層変数)</h3>
-          <DiagnosticInsight result={diagnosis.result} internal={true} />
+          <h3 className="font-bold">診断の詳しい中身</h3>
+          <DiagnosticInsight result={diagnosis.result} internal={false} />
+          <details className="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-2">
+            <summary className="cursor-pointer text-xs text-slate-500 font-semibold">
+              管理者ビュー(回答メタ分析・兆候レベルのフラグを含む)── 開発確認用
+            </summary>
+            <div className="mt-3">
+              <DiagnosticInsight result={diagnosis.result} internal={true} />
+            </div>
+          </details>
         </section>
       )}
 
@@ -248,6 +261,9 @@ function PersonalInsightSection({
         alliances: diagnosis.result?.alliances,
         platform: diagnosis.result?.platform,
         overObserver: diagnosis.result?.overObserver,
+        // v2.1(2026-07-03)
+        bSeparation: diagnosis.result?.bSeparation,
+        conflict: diagnosis.result?.conflict,
       };
       const res = await fetch("/api/personal-insight", {
         method: "POST",
@@ -297,8 +313,8 @@ function PersonalInsightSection({
       </div>
       {!insight && !generating && (
         <p className="text-sm text-slate-600 leading-relaxed">
-          診断結果(A/B/C/D・5感情・G2/G3/G4/G5・第2層変数)と入力情報を統合し、
-          Claude があなた専用の分析を生成します。
+          49問の回答すべて(4つの動き方・内側と外側のギャップ・気づきの力・回答のクセまで)と
+          入力情報を統合し、AI があなた専用の分析文を生成します。
           <br />
           <span className="text-xs text-slate-500 mt-1 inline-block">
             ※ 一度生成した結果はキャッシュされます。再生成ボタンで上書き可能。

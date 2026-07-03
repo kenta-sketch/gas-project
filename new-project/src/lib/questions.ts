@@ -1,10 +1,10 @@
-// QMT 50問診断 v2.0(2026-06-13)
+// QMT 50問診断 v2.1(2026-07-03)
 // 設計書: docs/theory/notes/2026-06-13-qmt-50q-design-v2.md
 // 理論底本: docs/theory/pdfs/2026-06-13-QMT-theory-v10-complete.pdf
 //
-// 47問構成:
+// 49問構成:
 //   axis(26): A 5 + B 6 + C 5 + D 5 + BC 5 = 26問(コア4軸 + 人を読む力)
-//   aSeparation(4): AS-1, AS-2(A抑圧判定) + FZ-1, FZ-2(凍結判別)
+//   aSeparation(6): AS-1, AS-2(A抑圧判定) + eB-1, eB-2(B表出・隠れ消耗型判定) + FZ-1, FZ-2(凍結判別)
 //   integration(7): OB-1〜OB-5(気づきの段階) + OD-1, OD-2(考えすぎ)
 //   responsibility(8): 強みのペア(BD, AC, BC, AB 各2問)
 //   orgRisk(2): PL-1, PL-2(コンディション)
@@ -55,13 +55,20 @@ export const AXIS_QUESTIONS: DiagnosticQuestion[] = [
 ];
 
 // ============================================================
-// aSeparation: A抑圧判定 + 凍結判別(4問)
+// aSeparation: A抑圧判定 + B表出判定 + 凍結判別(6問)
 // 「内側で感じてるのに、外に出さない」状態の検出
 // ============================================================
 export const A_SEPARATION_QUESTIONS: DiagnosticQuestion[] = [
   // A抑圧判定 ── 一人だと感じる、人前だと出せない
   { id: "AS-1", text: "一人ならできるが、人前ではできない感情表現がある", category: "AS", kind: "core", weight: 2.0 },
   { id: "AS-2", text: "後から「本当はこう言いたかった」と思うことが多い", category: "AS", kind: "core", weight: 2.0 },
+];
+
+// B表出判定(v2.1 新規)── 「気にしているのに出さない=隠れ消耗型」の検出
+// 理論v10 表5: B内的高×B表出低は現場で誤読最多・燃え尽き最多のタイプ
+export const B_EXPRESSION_QUESTIONS: DiagnosticQuestion[] = [
+  { id: "eB-1", text: "不安や気がかりを、周りの人に話せる方だ", category: "eB", kind: "core", weight: 1.5 },
+  { id: "eB-2", text: "「気にしていない」ように振る舞うのが得意だ", category: "eB", kind: "reverse", weight: 1.5 },
 ];
 
 // 凍結判別(常時2問・条件分岐なし、シンプル化)
@@ -139,10 +146,10 @@ export const QUESTION_SECTIONS: QuestionSection[] = [
   },
   {
     id: "aSeparation",
-    title: "Section 2: 内側と外側のギャップ(4問)",
+    title: "Section 2: 内側と外側のギャップ(6問)",
     description:
-      "「内側で感じていることを、外に出せているか」「強いストレス下で何が起きるか」を見ます。4問。",
-    questions: [...A_SEPARATION_QUESTIONS, ...FZ_QUESTIONS],
+      "「内側で感じていることを、外に出せているか」「強いストレス下で何が起きるか」を見ます。6問。",
+    questions: [...A_SEPARATION_QUESTIONS, ...B_EXPRESSION_QUESTIONS, ...FZ_QUESTIONS],
     field: "aSeparation",
   },
   {

@@ -14,6 +14,7 @@ const TONE: Record<string, { bar: string; chip: string; bg: string; border: stri
   yellow: { bar: "bg-gradient-to-r from-yellow-300 to-yellow-500", chip: "bg-yellow-50 text-yellow-700 border-yellow-200", bg: "bg-yellow-50/40", border: "border-yellow-200" },
   gray: { bar: "bg-gradient-to-r from-gray-300 to-gray-500", chip: "bg-gray-50 text-gray-700 border-gray-300", bg: "bg-gray-50/40", border: "border-gray-200" },
   lime: { bar: "bg-gradient-to-r from-lime-300 to-lime-500", chip: "bg-lime-50 text-lime-700 border-lime-200", bg: "bg-lime-50/40", border: "border-lime-200" },
+  orange: { bar: "bg-gradient-to-r from-orange-300 to-orange-500", chip: "bg-orange-50 text-orange-700 border-orange-200", bg: "bg-orange-50/40", border: "border-orange-200" },
 };
 
 interface Props {
@@ -35,7 +36,7 @@ export function TypeInsight({ type, variant = "full" }: Props) {
               タイプの傾向(簡易)
             </div>
             <h3 className="text-base font-bold text-slate-900 leading-snug">
-              <span className={"inline-block px-2 py-0.5 rounded-full text-xs border mr-2 " + tone.chip}>{type}</span>
+              <span className={"inline-block px-2 py-0.5 rounded-full text-xs border mr-2 " + tone.chip}>{desc.displayName}</span>
               {desc.headline}
             </h3>
           </div>
@@ -61,7 +62,7 @@ export function TypeInsight({ type, variant = "full" }: Props) {
             このタイプの傾向(詳細)
           </div>
           <h3 className="text-lg font-bold text-slate-900 mb-2">
-            <span className={"inline-block px-2 py-0.5 rounded-full text-sm border mr-2 " + tone.chip}>{type}</span>
+            <span className={"inline-block px-2 py-0.5 rounded-full text-sm border mr-2 " + tone.chip}>{desc.displayName}</span>
             {desc.headline}
           </h3>
           <p className="text-sm text-slate-700 leading-relaxed">{desc.summary}</p>

@@ -61,6 +61,7 @@ export type QuadType =
   | "蓄積型"
   | "A抑圧型"
   | "A凍結型"
+  | "隠れ消耗型"
   | "中庸偽装型"
   | "単独運転型";
 
@@ -75,6 +76,7 @@ export const ALL_QUAD_TYPES: QuadType[] = [
   "蓄積型",
   "A抑圧型",
   "A凍結型",
+  "隠れ消耗型",
   "中庸偽装型",
   "単独運転型",
 ];
@@ -102,6 +104,7 @@ export interface ASeparation {
 export type IntegrationStatus =
   | "本物の統合"
   | "部分統合"
+  | "発展途上"
   | "偽の中庸"
   | "単独運転";
 
@@ -110,6 +113,35 @@ export interface IntegrationDiagnosis {
   switchScore: number; // 0-30
   index: number; // (observer + switch) / 2
   status: IntegrationStatus;
+}
+
+// ============================================================
+// v2.1(2026-07-03): 関係(B)の内的/表出分離 — 理論v10 表5
+// 「気にしているのに出さない=隠れ消耗型」は現場で誤読最多・燃え尽き高リスク
+// ============================================================
+export type BClassification =
+  | "承認依存型"   // 内的高 × 表出高: 他者評価が行動を決定
+  | "隠れ消耗型"   // 内的高 × 表出低: 気にしているが出さない。燃え尽きやすい ★
+  | "社会的演技型" // 内的低 × 表出高: スキルとしての社交
+  | "独立型";      // 内的低 × 表出低: 非評価依存
+
+export interface BSeparation {
+  internal: number; // 内側で気にする強さ(0-25)
+  external: number; // 外に出せる強さ(0-25)
+  classification: BClassification;
+}
+
+// ============================================================
+// v2.1: 葛藤状態(ACTT) — 理論v10 第六章
+// 情熱と関係が拮抗している状態。「苦しみではなく成長の入口」
+// Observerが起動できる唯一の構造的隙間
+// ============================================================
+export interface ConflictDiagnosis {
+  /** 葛藤状態フラグ(情熱・関係とも高く、拮抗している) */
+  flag: boolean;
+  /** 情熱と関係のスコア差(絶対値) */
+  gap: number;
+  note: string;
 }
 
 // ============================================================
@@ -153,8 +185,17 @@ export interface AllianceFlag {
   label: string;
   /** 強度(1.0〜5.0、2問の平均) */
   strength: number;
-  /** "weak" / "medium" / "strong" 3段階 */
+  /**
+   * "strong" = 2問とも4以上(設計書の検出基準)。本人向けに表示。
+   * "medium" = 兆候レベル(平均3.5以上)。管理者向けのみ表示。
+   */
   level: "weak" | "medium" | "strong";
+  /**
+   * 成熟した「統合」の可能性(理論v10 15.2)。
+   * A×B同盟が strong でも、洞察・論理・気づきが機能していれば
+   * 病理(同盟)ではなく統合 — 「相手を感じながら自分を失わない」型。
+   */
+  integrated?: boolean;
 }
 
 export interface AllianceDiagnosis {
@@ -335,6 +376,11 @@ export interface DiagnosticResult {
   platform?: PlatformDiagnosis;
   /** 考えすぎ状態(過剰Observer) */
   overObserver?: OverObserverDiagnosis;
+  // ─ v2.1 新規(2026-07-03) ─
+  /** 関係(B)の内的/表出分離 — 隠れ消耗型の検出 */
+  bSeparation?: BSeparation;
+  /** 葛藤状態(成長の入口) */
+  conflict?: ConflictDiagnosis;
 }
 
 // ============================================================
@@ -559,6 +605,7 @@ export type QuestionCategory =
   | "AG" | "RV" | "IM"
   // v2.0 新規(2026-06-13)
   | "axis_BC"     // 人を読む力(B由来C・対人カン)
+  | "eB"          // 関係(B)の表出(v2.1: 隠れ消耗型判定用)
   | "AS"          // A抑圧判定(内側で感じてるのに出さない)
   | "OD"          // 過剰Observer(考えすぎ状態)
   | "AL_BD"       // 強みのペア:情熱×論理(「正しさの檻」)

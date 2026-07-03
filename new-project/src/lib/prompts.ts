@@ -401,11 +401,23 @@ export const PERSONAL_INSIGHT_SYSTEM = `あなたは「気持ちと判断のク�
 - 「情熱が強い人は感情的になりがち」のような汎用記述は禁止
 - 必ず数値(例: 内側の情熱=14.6/外に出す情熱=9.8)・回答のクセ(穏当/極端/中立)・経歴(具体的な職歴・自己PR)を文章に組み込む
 - 「あなたは関係が22.5と突出しているので○○」のように個別根拠を入れる
-- 「強みのペア」が検出されていれば、その盲点リスクに必ず触れる
-- 「考えすぎ状態」「コンディション低下」「対人カンの歪み」フラグがあれば必ず触れる
+- 「強みのペア」が検出されていれば、その盲点リスクに必ず触れる(ただし integrated=true なら成熟した統合として肯定的に扱う)
+- 「隠れ消耗型」「考えすぎ状態」「コンディション低下」「対人カンの歪み」「葛藤状態」フラグがあれば必ず触れる
 - 中立(3)選択率が高ければ「質問に乗り切れていない可能性」も触れる
 - 偽善的な賛美・過度な病理化は避ける
 - 一般会社員にも伝わる平易な日本語(専門用語ゼロ)
+
+【文体の型(この理論の創始者の書き方。必ず従う)】
+1. 数値→構造→実感の3段変換: 数値を挙げたら、その構造的意味を説明し、必ず本人の日常の実感に着地させる。
+   例:「怒りだけが2と低い。ネガティブな感情を内側で抱える傾向がある。しんどいとき、誰より先に自分を責めやすいのはそのためです」
+2. 欠陥の構造化: 弱点は性格や意志の問題にせず、構造として説明する。
+   「意志の弱さではなく、出力差の問題」「努力不足ではなく、配置の問題」「失敗ではなく、未処理が残っている状態」
+3. 体験照合:「こんな瞬間はありませんか」と具体的な場面で本人の記憶に触れる(例:「後から『本当はこう言いたかった』と思うことが多い」)
+4. 締めは希望×現実: 「構造は更新できる」方向で終える。小さな一歩(「一つだけ変える」「一日だけ試す」)を具体的に示す
+5. 使える表現の例(文脈に合えば流用してよい):
+   「直感の速さは、過去の遅さの蓄積」「感情を消したら、あなたの最大の強みが消えます」
+   「分かっているのにできない、は意志の弱さではなく、気づきと出力の差」
+   「他の人の感情は、他の人のものです。すべて抱える必要はありません」
 
 【絶対NG】
 - JSON 以外の出力(コードブロック、説明文、コメント)
@@ -491,7 +503,7 @@ export interface PersonalInsightInput {
   };
   /** 強みのペア・組み合わせクセ */
   alliances?: {
-    flags: { label: string; strength: number; level: string }[];
+    flags: { label: string; strength: number; level: string; integrated?: boolean }[];
     hasStrongPair: boolean;
   };
   /** コンディション(土台) */
@@ -504,6 +516,19 @@ export interface PersonalInsightInput {
   overObserver?: {
     level: number;        // 1-5
     flag: boolean;
+    note: string;
+  };
+  // ─ v2.1 新規(2026-07-03) ─
+  /** 関係(B)の内的/表出分離(隠れ消耗型の検出) */
+  bSeparation?: {
+    internal: number;     // 0-25
+    external: number;     // 0-25
+    classification: string; // 承認依存型/隠れ消耗型/社会的演技型/独立型
+  };
+  /** 葛藤状態(成長の入口) */
+  conflict?: {
+    flag: boolean;
+    gap: number;
     note: string;
   };
 }
@@ -532,6 +557,19 @@ export function personalInsightUser(input: PersonalInsightInput): string {
     lines.push(`  外に出せる強さ:   ${input.aSeparation.external} / 25`);
     lines.push(`  タイプ: ${input.aSeparation.classification}${input.aSeparation.frozen ? " (★凍結のサイン)" : ""}`);
   }
+  if (input.bSeparation) {
+    lines.push("");
+    lines.push(`【内側 vs 外側の「気にする心」】`);
+    lines.push(`  内側で気にする強さ: ${input.bSeparation.internal} / 25`);
+    lines.push(`  外に出せる強さ:     ${input.bSeparation.external} / 25`);
+    lines.push(`  タイプ: ${input.bSeparation.classification}${input.bSeparation.classification === "隠れ消耗型" ? " (★燃え尽き注意。周囲から誤読されやすい。必ず触れること)" : ""}`);
+  }
+  if (input.conflict?.flag) {
+    lines.push("");
+    lines.push(`【葛藤状態(成長の入口)】 情熱と関係が拮抗(差 ${input.conflict.gap} 点)`);
+    lines.push(`  解釈: ${input.conflict.note}`);
+    lines.push(`  ★ この状態は「苦しさ」ではなく「気づきを鍛える最大のチャンス」として肯定的に書くこと。`);
+  }
   if (input.integration) {
     lines.push("");
     lines.push(`【気づきの力】 スコア ${input.integration.observerScore}/30 / 状態: ${input.integration.status}`);
@@ -552,7 +590,7 @@ export function personalInsightUser(input: PersonalInsightInput): string {
     lines.push("");
     lines.push(`【強みのペア・組み合わせクセ(検出されたもの)】`);
     for (const f of input.alliances.flags) {
-      lines.push(`  - ${f.label} : 強さ ${f.strength}/5 (${f.level})`);
+      lines.push(`  - ${f.label} : 強さ ${f.strength}/5 (${f.integrated ? "統合=成熟した使い方。肯定的に扱う" : f.level})`);
     }
     if (input.alliances.hasStrongPair) {
       lines.push(`  ★ 強いペアが検出されています。盲点として cautions / managementHint に必ず触れること。`);

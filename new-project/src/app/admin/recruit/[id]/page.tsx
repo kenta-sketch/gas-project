@@ -399,6 +399,9 @@ function PersonalInsightSection({
         alliances: diagnosis.result?.alliances,
         platform: diagnosis.result?.platform,
         overObserver: diagnosis.result?.overObserver,
+        // v2.1(2026-07-03)
+        bSeparation: diagnosis.result?.bSeparation,
+        conflict: diagnosis.result?.conflict,
       };
       const res = await fetch("/api/personal-insight", {
         method: "POST",

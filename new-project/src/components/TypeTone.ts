@@ -12,6 +12,7 @@ export const TYPE_TONE: Record<QuadType, string> = {
   蓄積型: "bg-purple-50 text-purple-700 border-purple-200",
   A抑圧型: "bg-pink-50 text-pink-700 border-pink-200",
   A凍結型: "bg-gray-50 text-gray-700 border-gray-300",
+  隠れ消耗型: "bg-orange-50 text-orange-700 border-orange-200",
   中庸偽装型: "bg-yellow-50 text-yellow-700 border-yellow-200",
   単独運転型: "bg-lime-50 text-lime-700 border-lime-200",
 };

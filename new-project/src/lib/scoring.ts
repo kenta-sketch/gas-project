@@ -1,9 +1,12 @@
-// クアッドマインド診断 採点ロジック(完全仕様書 v1.0 準拠)
-// 出典: docs/theory/notes/2026-05-11-diagnostic-spec-v1.md
+// クアッドマインド診断 採点ロジック v2.1(2026-07-03)
+// 出典: docs/theory/pdfs/2026-06-13-QMT-theory-v10-complete.pdf
+//       docs/theory/notes/2026-06-13-qmt-50q-design-v2.md
+//       docs/theory/notes/2026-05-12-likert-120-empirical-analysis.md(122人実証)
 
 import {
   AXIS_QUESTIONS,
   A_SEPARATION_QUESTIONS,
+  B_EXPRESSION_QUESTIONS,
   FZ_QUESTIONS,
   INTEGRATION_QUESTIONS,
   RESPONSIBILITY_QUESTIONS,
@@ -39,6 +42,10 @@ import type {
   PlatformDiagnosis,
   BcInsightScore,
   OverObserverDiagnosis,
+  // v2.1(2026-07-03)
+  BSeparation,
+  BClassification,
+  ConflictDiagnosis,
 } from "./types";
 
 // ============================================================
@@ -84,7 +91,10 @@ export function computeAxisScores(answers: DiagnosticAnswers): AxisScores {
 // 抑圧判定(AS-1, AS-2): aSeparation フィールドから
 // 凍結判別(FZ-1, FZ-2): aSeparation フィールドから
 // ============================================================
-export function computeASeparation(answers: DiagnosticAnswers): ASeparation {
+export function computeASeparation(
+  answers: DiagnosticAnswers,
+  axisScores?: AxisScores,
+): ASeparation {
   // 内的A(自分の中の感情): A-1, A-2, A-3 (axis_A の core)
   const iAQs = AXIS_QUESTIONS.filter(
     (q) => q.category === "axis_A" && ["A-1", "A-2", "A-3"].includes(q.id),
@@ -102,32 +112,74 @@ export function computeASeparation(answers: DiagnosticAnswers): ASeparation {
     .filter((v): v is LikertValue => v !== undefined);
   const asAvg = asValues.length > 0 ? asValues.reduce((s, v) => s + v, 0) / asValues.length : 0;
 
-  // 凍結判別: FZ-1(何も感じない) の値が主
+  // 凍結判別(理論v10: 凍結=発火停止。内側が弱っていることが条件)
+  // FZ-2≤3 まで許容: 穏当型回答者(122人中49%)は1-2をほぼ使わないため、
+  // ≤2に絞ると系統的に検出漏れする。FZ-2=3は設計書上「凍結の兆候を
+  // 認識していない可能性=要注意」の値。
   const fz1 = answers.aSeparation["FZ-1"] ?? 0;
   const fz2 = answers.aSeparation["FZ-2"] ?? 0;
-  // 凍結 = FZ-1 高い かつ FZ-2 低い(沈黙時に感じてない)
-  const frozen = fz1 >= 4 && fz2 <= 2;
+  const frozen = fz1 >= 4 && fz2 <= 3 && internal < 13;
 
   let classification: AClassification;
   const INTERNAL_THRESHOLD = 13;
   const EXTERNAL_THRESHOLD = 13;
   const SUPPRESSION_THRESHOLD = 3.5;
+  // 理論v10/v3.3: 抑圧は「Bによる封鎖」。B(関係)が高いことが構造条件。
+  const bHigh = axisScores ? axisScores.B >= 13 : false;
 
-  if (internal < INTERNAL_THRESHOLD && external < EXTERNAL_THRESHOLD) {
-    // 内側も外側も弱い → 真性A低 or 凍結
-    classification = frozen ? "A凍結型" : "真性A低";
+  if (frozen) {
+    classification = "A凍結型";
+  } else if (internal < INTERNAL_THRESHOLD && external < EXTERNAL_THRESHOLD) {
+    classification = "真性A低";
   } else if (internal >= INTERNAL_THRESHOLD && external < EXTERNAL_THRESHOLD) {
-    // 内側強い・外側弱い → 抑圧 or 凍結
-    if (frozen) classification = "A凍結型";
-    else if (asAvg >= SUPPRESSION_THRESHOLD) classification = "A抑圧型";
-    else classification = "A抑圧型"; // 軽度でも抑圧として扱う
+    // 内側強い・外側弱い → 抑圧の証拠(AS高 or B高)があれば火山型、
+    // なければ「自分で制御している」成熟パターン(A管理型)とみなす
+    if (asAvg >= SUPPRESSION_THRESHOLD || bHigh) classification = "A抑圧型";
+    else classification = "A管理型";
   } else if (internal >= INTERNAL_THRESHOLD && external >= EXTERNAL_THRESHOLD) {
     classification = "A管理型";
   } else {
+    // 内側弱い × 外側強い = 場の読みによる表出(理論v10「適応型(演技型)」)
     classification = "演技的表出フラグ";
   }
 
   return { internal, external, classification, frozen };
+}
+
+// ============================================================
+// 関係(B)の内的/表出分離 v2.1 新規(理論v10 表5)
+// 内側: B-1(頭から離れない), B-2(プレッシャー), B-3(引っかかり続ける)
+// 表出: eB-1(気がかりを話せる), eB-2(気にしてないフリが得意・逆転)
+// ============================================================
+export function computeBSeparation(answers: DiagnosticAnswers): BSeparation {
+  const iBQs = AXIS_QUESTIONS.filter(
+    (q) => q.category === "axis_B" && ["B-1", "B-2", "B-3"].includes(q.id),
+  );
+  const internal = scaleTo(weightedSum(iBQs, answers.axis), 25);
+  const external = scaleTo(weightedSum(B_EXPRESSION_QUESTIONS, answers.aSeparation), 25);
+
+  const THRESHOLD = 13;
+  let classification: BClassification;
+  if (internal >= THRESHOLD && external >= THRESHOLD) classification = "承認依存型";
+  else if (internal >= THRESHOLD && external < THRESHOLD) classification = "隠れ消耗型";
+  else if (internal < THRESHOLD && external >= THRESHOLD) classification = "社会的演技型";
+  else classification = "独立型";
+
+  return { internal, external, classification };
+}
+
+// ============================================================
+// 葛藤状態(ACTT)v2.1 新規(理論v10 第六章)
+// 情熱(A)と関係(B)が両方高く拮抗 = Observerが起動できる唯一の構造的隙間
+// 「苦しみではなく、成長の入口」
+// ============================================================
+export function computeConflict(axisScores: AxisScores): ConflictDiagnosis {
+  const gap = Math.abs(axisScores.A - axisScores.B);
+  const flag = axisScores.A >= 15 && axisScores.B >= 15 && gap <= 3;
+  const note = flag
+    ? "「言いたい」と「どう思われるか」が拮抗している状態。理論上、気づきの力を鍛える最大のチャンスがある地点。"
+    : "";
+  return { flag, gap, note };
 }
 
 // ============================================================
@@ -148,21 +200,20 @@ export function computeIntegration(
   const index = observerScore;
 
   const allAxes = [axisScores.A, axisScores.B, axisScores.C, axisScores.D];
-  const allBalanced = allAxes.every((v) => v >= 13);
-  const anyLow = allAxes.some((v) => v < 10);
+  // 閾値15: 122人実証で軸平均16〜17.5のため、13では大多数が「全軸高」になる
+  const allBalanced = allAxes.every((v) => v >= 15);
   const max = Math.max(...allAxes);
   const min = Math.min(...allAxes);
   const isBalanced = max - min < 8;
 
+  // グレーゾーン(15〜22)を「単独運転」に落とさない(飯淵さん17.7誤判定バグの修正)
   let status: IntegrationStatus;
-  if (index >= 22 && allBalanced) {
-    status = "本物の統合";
-  } else if (index >= 18 && anyLow) {
-    status = "部分統合";
-  } else if (index < 15 && isBalanced) {
-    status = "偽の中庸";
+  if (index >= 22) {
+    status = allBalanced ? "本物の統合" : "部分統合";
+  } else if (index >= 15) {
+    status = "発展途上";
   } else {
-    status = "単独運転";
+    status = isBalanced ? "偽の中庸" : "単独運転";
   }
 
   return { observerScore, switchScore, index, status };
@@ -195,9 +246,10 @@ export function computeBcInsight(answers: DiagnosticAnswers): BcInsightScore {
   );
   const score = scaleTo(weightedSum(coreQs, answers.axis), 25);
   const distortion = answers.axis["BC-5"] ?? 0;
+  // 歪みは最優先で判定する。スコアが低くても「不信が強い」状態は
+  // マスクしない(経験が浅い×不信が強い、が一番ケアすべき組み合わせ)
   let status: "healthy" | "distorted" | "low";
-  if (score >= 17 && distortion <= 3) status = "healthy";
-  else if (score >= 13 && distortion >= 4) status = "distorted";
+  if (distortion >= 4) status = "distorted";
   else if (score < 13) status = "low";
   else status = "healthy";
   return { score, distortion, status };
@@ -207,14 +259,19 @@ export function computeBcInsight(answers: DiagnosticAnswers): BcInsightScore {
 // 強みのペア・組み合わせクセ(エンジン同盟)v2.0 新規
 // 4ペア × 2問。各ペアの平均が 4.0以上で strong / 3.0以上で medium
 // ============================================================
+// 理論v10 表16 の命名をそのまま使う(機能説明よりも遥かに記憶に残る)
 const ALLIANCE_LABELS: Record<AllianceKind, string> = {
-  AL_BD: "関係 × 論理(「正しさで自分を縛る」クセ)",
-  AL_AC: "情熱 × 洞察(「感覚と経験で押し切る」クセ)",
-  AL_BC: "関係 × 洞察(「空気と経験で本音を出さない」クセ)",
-  AL_AB: "情熱 × 関係(「感情と承認で振り回される」クセ)",
+  AL_BD: "正しさの檻 ── 関係 × 論理",
+  AL_AC: "天才の暴走 ── 情熱 × 洞察",
+  AL_BC: "空気の独裁 ── 関係 × 洞察",
+  AL_AB: "承認の炎 ── 情熱 × 関係",
 };
 
-export function computeAlliances(answers: DiagnosticAnswers): AllianceDiagnosis {
+export function computeAlliances(
+  answers: DiagnosticAnswers,
+  axisScores?: AxisScores,
+  observerScore?: number,
+): AllianceDiagnosis {
   const flags: AllianceFlag[] = [];
   const pairs: { kind: AllianceKind; ids: string[] }[] = [
     { kind: "AL_BD", ids: ["AL-BD1", "AL-BD2"] },
@@ -228,20 +285,38 @@ export function computeAlliances(answers: DiagnosticAnswers): AllianceDiagnosis 
       .filter((v): v is LikertValue => v !== undefined);
     if (values.length === 0) continue;
     const strength = values.reduce((s, v) => s + v, 0) / values.length;
+
+    // 設計書の検出基準は「2問とも4-5」のみ。
+    // 122人実証で回答平均3.39・最頻値4のため、平均3.0では過半数がヒットする。
+    // 平均3.5〜は「兆候」として管理者向けのみ(medium)。
     let level: "weak" | "medium" | "strong";
-    if (strength >= 4.0) level = "strong";
-    else if (strength >= 3.0) level = "medium";
+    if (values.every((v) => v >= 4)) level = "strong";
+    else if (strength >= 3.5) level = "medium";
     else level = "weak";
-    if (level !== "weak") {
-      flags.push({
-        kind,
-        label: ALLIANCE_LABELS[kind],
-        strength: Math.round(strength * 10) / 10,
-        level,
-      });
+    if (level === "weak") continue;
+
+    // 統合/同盟の判別(理論v10 15.2): 同盟は他のエンジンとObserverを
+    // 抑圧するが、統合は活用する。洞察・論理・気づきが機能していれば
+    // 病理ではなく成熟(例: A×B統合=「相手を感じながら自分を失わない」)
+    let integrated = false;
+    if (level === "strong" && axisScores && observerScore !== undefined) {
+      if (kind === "AL_AB") {
+        integrated = axisScores.C >= 15 && axisScores.D >= 15 && observerScore >= 18;
+      }
     }
+
+    flags.push({
+      kind,
+      label: ALLIANCE_LABELS[kind],
+      strength: Math.round(strength * 10) / 10,
+      level,
+      integrated: integrated || undefined,
+    });
   }
-  return { flags, hasStrongPair: flags.some((f) => f.level === "strong") };
+  return {
+    flags,
+    hasStrongPair: flags.some((f) => f.level === "strong" && !f.integrated),
+  };
 }
 
 // ============================================================
@@ -298,14 +373,16 @@ export function judgeType(
   aSep: ASeparation,
   integration: IntegrationDiagnosis,
   orgRisk: OrgRiskDiagnosis,
+  bSep?: BSeparation,
 ): QuadType {
-  // 1. 癌候補フラグは最優先(注: 本人向け出力ではこの型名を見せない)
-  //    high レベルの組織毀損があれば、専門的ラベルとして残す
-  //    ※ 実際の表示は呼び出し側で「内部出力」と「外部出力」を分ける
+  // 判定優先順位(設計書§2.4): 危険な状態ほど先に判定して伝える
 
-  // 2. A発火/表出の乖離(A抑圧/A凍結が高優先)
+  // 1. A発火/表出の乖離(A凍結 > A抑圧)
   if (aSep.classification === "A凍結型") return "A凍結型";
   if (aSep.classification === "A抑圧型") return "A抑圧型";
+
+  // 2. 隠れ消耗型(v2.1): 気にしているのに出さない。燃え尽き最多・誤読最多
+  if (bSep?.classification === "隠れ消耗型") return "隠れ消耗型";
 
   // 3. 統合状態
   if (integration.status === "本物の統合") return "統合型";
@@ -537,11 +614,16 @@ export function computeFullDiagnosis(
   timingPerQuestion?: Record<string, number>,
 ): DiagnosticResult {
   const scores = computeAxisScores(answers);
-  const aSeparation = computeASeparation(answers);
+  const aSeparation = computeASeparation(answers, scores);
   const integration = computeIntegration(answers, scores);
   const responsibility = computeResponsibility(answers);
   const orgRisk = computeOrgRisk(answers);
-  const primaryType = judgeType(scores, aSeparation, integration, orgRisk);
+
+  // v2.1 新規(2026-07-03)
+  const bSeparation = computeBSeparation(answers);
+  const conflict = computeConflict(scores);
+
+  const primaryType = judgeType(scores, aSeparation, integration, orgRisk, bSeparation);
 
   // 第2層変数(2026-05-12 追加)
   const responseStyle = computeResponseStyle(answers);
@@ -551,9 +633,9 @@ export function computeFullDiagnosis(
 
   // v2.0 新規(2026-06-13)
   const bcInsight = computeBcInsight(answers);
-  const alliances = computeAlliances(answers);
-  const platform = computePlatform(answers);
   const overObserver = computeOverObserver(answers);
+  const alliances = computeAlliances(answers, scores, integration.observerScore);
+  const platform = computePlatform(answers);
 
   return {
     scores,
@@ -571,6 +653,8 @@ export function computeFullDiagnosis(
     alliances,
     platform,
     overObserver,
+    bSeparation,
+    conflict,
   };
 }
 

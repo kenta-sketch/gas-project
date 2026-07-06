@@ -370,7 +370,7 @@ export function DiagnosticInsight({ result, internal = false }: Props) {
             ))}
           </div>
           <div className="mt-2 text-[11px] text-slate-500 leading-relaxed">
-            ※ 2つの強みが手を組むと、互いの正しさを証明し合って、残りの動き方が見えなくなることがあります。「強み」と感じている組み合わせほど、盲点として一度疑ってみる価値があります。
+            ※ この判定は4つの動き方スコアの形からの推定です。2つの強みが手を組むと、互いの正しさを証明し合って、残りの動き方が見えなくなることがあります。「強み」と感じている組み合わせほど、盲点として一度疑ってみる価値があります。
           </div>
         </section>
       )}

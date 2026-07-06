@@ -173,9 +173,14 @@ export function computeBSeparation(answers: DiagnosticAnswers): BSeparation {
 // 情熱(A)と関係(B)が両方高く拮抗 = Observerが起動できる唯一の構造的隙間
 // 「苦しみではなく、成長の入口」
 // ============================================================
-export function computeConflict(axisScores: AxisScores): ConflictDiagnosis {
+export function computeConflict(
+  axisScores: AxisScores,
+  observerScore?: number,
+): ConflictDiagnosis {
   const gap = Math.abs(axisScores.A - axisScores.B);
-  const flag = axisScores.A >= 15 && axisScores.B >= 15 && gap <= 3;
+  // 気づきが既に高い人(統合済み)には「入口」の案内は不要
+  const alreadyIntegrated = observerScore !== undefined && observerScore >= 22;
+  const flag = axisScores.A >= 15 && axisScores.B >= 15 && gap <= 3 && !alreadyIntegrated;
   const note = flag
     ? "「言いたい」と「どう思われるか」が拮抗している状態。理論上、気づきの力を鍛える最大のチャンスがある地点。"
     : "";
@@ -238,11 +243,11 @@ export function computeOverObserver(answers: DiagnosticAnswers): OverObserverDia
 
 // ============================================================
 // 人を読む力(対人カン・B由来C)v2.0 新規
-// BC-1〜BC-4 が主、BC-5 が逆指標(歪曲度)
+// BC-1, BC-2 が主、BC-5 が逆指標(歪曲度)
 // ============================================================
 export function computeBcInsight(answers: DiagnosticAnswers): BcInsightScore {
   const coreQs = AXIS_QUESTIONS.filter(
-    (q) => q.category === "axis_BC" && ["BC-1", "BC-2", "BC-3", "BC-4"].includes(q.id),
+    (q) => q.category === "axis_BC" && ["BC-1", "BC-2", "BC-3", "BC-4"].includes(q.id), // v3.0はBC-1,BC-2のみ存在
   );
   const score = scaleTo(weightedSum(coreQs, answers.axis), 25);
   const distortion = answers.axis["BC-5"] ?? 0;
@@ -267,55 +272,53 @@ const ALLIANCE_LABELS: Record<AllianceKind, string> = {
   AL_AB: "承認の炎 ── 情熱 × 関係",
 };
 
+// v3.0: 専用質問(旧AL 8問)を廃止し、軸スコアからの推定に変更。
+// 理論v10 8.1: 同盟 = 2つのエンジンが相互強化し、残りのエンジンを
+// 構造的に「抑圧」する状態。つまり「ペアが高い」だけでは同盟ではなく、
+// 「ペアが高い × 残りが低い」が定義そのもの。この構造は軸スコアから直接読める。
 export function computeAlliances(
-  answers: DiagnosticAnswers,
+  _answers: DiagnosticAnswers,
   axisScores?: AxisScores,
   observerScore?: number,
 ): AllianceDiagnosis {
   const flags: AllianceFlag[] = [];
-  const pairs: { kind: AllianceKind; ids: string[] }[] = [
-    { kind: "AL_BD", ids: ["AL-BD1", "AL-BD2"] },
-    { kind: "AL_AC", ids: ["AL-AC1", "AL-AC2"] },
-    { kind: "AL_BC", ids: ["AL-BC1", "AL-BC2"] },
-    { kind: "AL_AB", ids: ["AL-AB1", "AL-AB2"] },
-  ];
-  for (const { kind, ids } of pairs) {
-    const values = ids
-      .map((id) => answers.responsibility[id])
-      .filter((v): v is LikertValue => v !== undefined);
-    if (values.length === 0) continue;
-    const strength = values.reduce((s, v) => s + v, 0) / values.length;
+  if (!axisScores) return { flags, hasStrongPair: false };
 
-    // 設計書の検出基準は「2問とも4-5」のみ。
-    // 122人実証で回答平均3.39・最頻値4のため、平均3.0では過半数がヒットする。
-    // 平均3.5〜は「兆候」として管理者向けのみ(medium)。
+  const pairs: { kind: AllianceKind; axes: [AxisKey, AxisKey] }[] = [
+    { kind: "AL_BD", axes: ["B", "D"] },
+    { kind: "AL_AC", axes: ["A", "C"] },
+    { kind: "AL_BC", axes: ["B", "C"] },
+    { kind: "AL_AB", axes: ["A", "B"] },
+  ];
+  const all: AxisKey[] = ["A", "B", "C", "D"];
+
+  for (const { kind, axes } of pairs) {
+    const pairMin = Math.min(axisScores[axes[0]], axisScores[axes[1]]);
+    const others = all.filter((k) => !axes.includes(k));
+    const othersMean = (axisScores[others[0]] + axisScores[others[1]]) / 2;
+    const observerLow = observerScore !== undefined && observerScore < 18;
+
+    // strong: ペア両方が高く、残り2軸が明確に抑圧されている
+    // medium(兆候・管理者向け): 同傾向がゆるやかに出ている
     let level: "weak" | "medium" | "strong";
-    if (values.every((v) => v >= 4)) level = "strong";
-    else if (strength >= 3.5) level = "medium";
+    if (pairMin >= 17 && othersMean <= 12 && observerLow) level = "strong";
+    else if (pairMin >= 15 && othersMean <= 13) level = "medium";
     else level = "weak";
     if (level === "weak") continue;
 
-    // 統合/同盟の判別(理論v10 15.2): 同盟は他のエンジンとObserverを
-    // 抑圧するが、統合は活用する。洞察・論理・気づきが機能していれば
-    // 病理ではなく成熟(例: A×B統合=「相手を感じながら自分を失わない」)
-    let integrated = false;
-    if (level === "strong" && axisScores && observerScore !== undefined) {
-      if (kind === "AL_AB") {
-        integrated = axisScores.C >= 15 && axisScores.D >= 15 && observerScore >= 18;
-      }
-    }
+    // 表示用の強度(1-5換算): ペアの高さと残りの低さの差から算出
+    const strength = Math.min(5, Math.max(1, Math.round(((pairMin - othersMean) / 10 + 2.5) * 10) / 10));
 
     flags.push({
       kind,
       label: ALLIANCE_LABELS[kind],
-      strength: Math.round(strength * 10) / 10,
+      strength,
       level,
-      integrated: integrated || undefined,
     });
   }
   return {
     flags,
-    hasStrongPair: flags.some((f) => f.level === "strong" && !f.integrated),
+    hasStrongPair: flags.some((f) => f.level === "strong"),
   };
 }
 
@@ -621,7 +624,7 @@ export function computeFullDiagnosis(
 
   // v2.1 新規(2026-07-03)
   const bSeparation = computeBSeparation(answers);
-  const conflict = computeConflict(scores);
+  const conflict = computeConflict(scores, integration.observerScore);
 
   const primaryType = judgeType(scores, aSeparation, integration, orgRisk, bSeparation);
 

@@ -392,6 +392,24 @@ export default function ApplyPage({
       presetTendency,
     };
     upsertApplicant(applicant);
+
+    // 中央DB(Supabase)にも保存 ── 失敗しても応募フローは止めない
+    void fetch("/api/diagnoses", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      keepalive: true,
+      body: JSON.stringify({
+        clientDiagnosisId: applicantId,
+        version: "v3.0-30q",
+        profile: { fullName, ageRange, gender, optionalContext: `応募: ${appliedPosition}` },
+        scores: result.scores,
+        emotions,
+        quadType: result.primaryType,
+        result,
+        answers,
+      }),
+    }).catch(() => {});
+
     clearDraft(token);
     setStep("done");
   }
@@ -408,7 +426,7 @@ export default function ApplyPage({
         <div className="text-xs tracking-widest text-slate-500">応募フォーム · token: {token}</div>
         <h1 className="text-2xl font-bold">採用応募</h1>
         <p className="text-sm text-slate-600 mt-1">
-          所要時間 約15-20分。プロフィール → 経歴 → 診断(75問・5セクション) で完了します。
+          所要時間 約10分。プロフィール → 経歴 → 診断(30問・4セクション) で完了します。
         </p>
         <p className="text-xs text-emerald-700 mt-1 inline-flex items-center gap-1">
           <span>💾</span>

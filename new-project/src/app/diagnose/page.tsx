@@ -243,6 +243,23 @@ function DiagnoseStandaloneInner() {
     };
     upsertStandaloneDiagnosis(diagnosis);
 
+    // 中央DB(Supabase)にも保存 ── 失敗しても診断フローは止めない
+    void fetch("/api/diagnoses", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      keepalive: true,
+      body: JSON.stringify({
+        clientDiagnosisId: diagnosisId,
+        version: "v3.0-30q",
+        profile: diagnosis.profile,
+        scores: result.scores,
+        emotions,
+        quadType: result.primaryType,
+        result,
+        answers,
+      }),
+    }).catch(() => {});
+
     // employeeId が指定されている場合、社員レコードにも追加
     if (employeeId) {
       const employee = findEmployeeMerged(employeeId);
@@ -255,7 +272,7 @@ function DiagnoseStandaloneInner() {
         const newEmployeeDiagnosis: Diagnosis = {
           date: today,
           scenario,
-          questionSetVersion: "v1.0",
+          questionSetVersion: "v3.0-30q",
           answers,
           scores: result.scores,
           emotions,
@@ -297,7 +314,7 @@ function DiagnoseStandaloneInner() {
           </p>
         )}
         <p className="text-sm text-slate-600 mt-1">
-          所要時間 約15-20分。プロフィール → 75問(5セクション)→ 5感情 で完了します。
+          所要時間 約5-7分。プロフィール → 30問(4セクション)→ 5感情 で完了します。深く考えず、直感で答えてください。
           {!linkedEmployee && (
             <>
               <br />

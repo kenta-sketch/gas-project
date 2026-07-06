@@ -313,7 +313,7 @@ function PersonalInsightSection({
       </div>
       {!insight && !generating && (
         <p className="text-sm text-slate-600 leading-relaxed">
-          49問の回答すべて(4つの動き方・内側と外側のギャップ・気づきの力・回答のクセまで)と
+          30問の回答すべて(4つの動き方・内側と外側のギャップ・気づきの力・回答のクセまで)と
           入力情報を統合し、AI があなた専用の分析文を生成します。
           <br />
           <span className="text-xs text-slate-500 mt-1 inline-block">

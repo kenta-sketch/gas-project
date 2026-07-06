@@ -36,6 +36,19 @@ export default function AdminHubPage() {
             </p>
           </div>
         </Link>
+        <Link
+          href="/admin/responses"
+          className="group block bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-card hover:shadow-card-hover transition-shadow"
+        >
+          <div className="h-1 bg-gradient-to-r from-purple-400 to-purple-600" />
+          <div className="p-6">
+            <div className="text-[10px] tracking-[0.25em] text-slate-500 uppercase font-semibold mb-2">SECTION 3</div>
+            <h2 className="text-xl font-bold text-slate-900 mb-3 group-hover:text-purple-700">回答データ →</h2>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              共有リンクから受けてもらった診断結果の一覧。誰が・いつ・どのタイプだったかが自動でたまり、いつでも見返せます。
+            </p>
+          </div>
+        </Link>
       </section>
     </div>
   );
